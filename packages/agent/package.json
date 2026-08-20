@@ -4,8 +4,8 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "ingest": "tsx src/pipeline.ts",
-    "migrate": "tsx src/migrate.ts",
+    "ingest": "tsx --env-file-if-exists=../../.env src/pipeline.ts",
+    "migrate": "tsx --env-file-if-exists=../../.env src/migrate.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
