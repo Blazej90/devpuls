@@ -3,7 +3,11 @@ packages:
   - "packages/*"
 
 # Skrypty postinstall wymagają jawnej zgody (pnpm 11).
-# unrs-resolver (tranzytywnie przez eslint-plugin-import-x) nie potrzebuje builda —
-# binarki dla platformy przychodzą jako optionalDependencies.
 allowBuilds:
+  # Nie potrzebuje builda — binarki dla platformy przychodzą jako optionalDependencies.
   unrs-resolver: false
+  # Potrzebuje — postinstall podpina binarkę esbuilda używaną przez tsx.
+  esbuild: true
+
+minimumReleaseAgeExclude:
+  - '@anthropic-ai/sdk@0.120.0'

@@ -1,21 +1,50 @@
+import { BackgroundBeams } from "@/components/ui/background-beams";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+
+const TOPICS = ["TypeScript", "React", "JavaScript", "Fullstack", "AI"] as const;
+
 export default function HomePage() {
   return (
-    <main className="mx-auto flex min-h-dvh w-full max-w-2xl flex-col justify-center gap-8 px-6 py-16">
-      <header className="space-y-3">
-        <h1 className="text-4xl font-semibold tracking-tight">DevPuls</h1>
-        <p className="text-muted-foreground text-balance">
-          Nowinki z TypeScript, Reacta, JS, fullstacku i AI — przefiltrowane pod kątem
-          trafności i streszczone po polsku, prosto na Twój ekran.
-        </p>
-      </header>
+    <main className="relative flex min-h-dvh flex-col justify-center overflow-hidden">
+      <BackgroundBeams className="pointer-events-none" />
 
-      <section className="border-border bg-card text-card-foreground rounded-lg border p-6">
-        <h2 className="font-medium">Nic tu jeszcze nie ma</h2>
-        <p className="text-muted-foreground mt-2 text-sm">
-          Pipeline pobierania źródeł i powiadomienia Web Push są w budowie. Lista
-          dostarczonych newsów pojawi się tutaj.
-        </p>
-      </section>
+      <div className="relative z-10 mx-auto flex w-full max-w-2xl flex-col gap-8 px-6 py-16">
+        <header className="space-y-4">
+          <h1 className="text-4xl font-semibold tracking-tight">DevPuls</h1>
+          <p className="text-muted-foreground text-balance">
+            Nowinki techniczne przefiltrowane pod kątem trafności i streszczone po
+            polsku, prosto na Twój ekran — z linkiem do oryginalnego źródła.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {TOPICS.map((topic) => (
+              <Badge key={topic} variant="secondary">
+                {topic}
+              </Badge>
+            ))}
+          </div>
+        </header>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Powiadomienia jeszcze nie działają</CardTitle>
+            <CardDescription>
+              Pipeline pobierania źródeł jest gotowy, brakuje jeszcze service workera
+              i zapisu subskrypcji Web Push.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button disabled>Włącz powiadomienia</Button>
+          </CardContent>
+        </Card>
+      </div>
     </main>
   );
 }

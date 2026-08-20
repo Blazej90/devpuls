@@ -11,6 +11,7 @@
     "build": "pnpm --filter web build",
     "start": "pnpm --filter web start",
     "lint": "pnpm --recursive lint",
+    "agent:migrate": "pnpm --filter @devpuls/agent migrate",
     "agent:ingest": "pnpm --filter @devpuls/agent ingest"
   }
 }

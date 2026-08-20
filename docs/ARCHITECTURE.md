@@ -28,6 +28,7 @@ devpuls/
 ├── CLAUDE.md
 ├── TODO.md
 ├── .gitignore
+├── .env.example                  # ANTHROPIC_API_KEY, DATABASE_URL, klucze VAPID
 ├── pnpm-workspace.yaml           # workspaces + allowBuilds (zgody na postinstall)
 ├── package.json                  # root: packageManager pnpm, skrypty proxujące
 ├── pnpm-lock.yaml
@@ -48,7 +49,7 @@ devpuls/
 │       │   ├── layout.tsx        # <html lang="pl">, metadata, viewport
 │       │   ├── page.tsx
 │       │   └── globals.css       # @theme + tokeny kolorów (light/dark)
-│       ├── components/ui/        # shadcn / Aceternity
+│       ├── components/ui/        # button, card, badge, background-beams
 │       ├── lib/
 │       │   └── utils.ts          # cn() — wymagane przez shadcn/Aceternity
 │       └── public/
@@ -56,12 +57,23 @@ devpuls/
 │           └── sw.js
 ├── packages/
 │   └── agent/                    # pipeline ingestion + Claude + push
-│       ├── package.json
+│       ├── package.json          # skrypty `ingest` / `migrate` (tsx)
+│       ├── tsconfig.json         # alias @/* -> packages/agent/src/*
+│       ├── sql/
+│       │   └── 001_init.sql    # schemat startowy (idempotentny DDL)
 │       ├── config/
 │       │   └── sources.json
 │       └── src/
-│           ├── sources/          # rss.ts, atom.ts, scrape.ts
+│           ├── sources/
+│           │   ├── index.ts      # dispatch po `type`
+│           │   ├── rss.ts
+│           │   ├── atom.ts
+│           │   └── scrape.ts     # HTML -> JSON przez Claude
+│           ├── types.ts
+│           ├── config.ts
+│           ├── anthropic.ts
 │           ├── pipeline.ts
+│           ├── migrate.ts
 │           ├── claude.ts
 │           ├── push.ts
 │           └── db.ts
@@ -84,8 +96,15 @@ devpuls/
 - `src/push.ts` — wysyłka Web Push do zapisanych subskrypcji (biblioteka `web-push`,
   klucze VAPID).
 - `src/db.ts` — klient Postgres (Neon). Tabele: `sources`, `items`, `push_subscriptions`.
-- Uruchamiany jako pojedynczy skrypt Node.js z `.github/workflows/ingest.yml` — nie jako
-  długo działający serwer.
+- `src/types.ts` — znormalizowany kształt wpisu (`NormalizedItem`) i wynik oceny
+  (`Assessment`), współdzielone przez wszystkie moduły.
+- `src/config.ts` — wczytanie `config/sources.json` + progi z ENV
+  (`RELEVANCE_THRESHOLD`, `MAX_ITEMS_PER_SOURCE`) i `requireEnv()`.
+- `src/anthropic.ts` — leniwie tworzony klient Claude i stała `MODEL`, wspólne dla
+  `claude.ts` i `sources/scrape.ts`.
+- `src/sources/index.ts` — dispatch po polu `type` ze źródła na właściwy fetcher.
+- Uruchamiany przez `tsx` jako pojedynczy skrypt Node.js z
+  `.github/workflows/ingest.yml` — nie jako długo działający serwer.
 
 ## 5. Źródła danych (potwierdzone)
 
@@ -136,18 +155,34 @@ Pełny, maszynowo czytelny config: `packages/agent/config/sources.json`.
 - Na iOS subskrypcje bywają zawodne po dłuższej nieaktywności appki — warto dodać w UI
   przypomnienie o ponownym udzieleniu zgody.
 
-## 7. Schemat bazy (szkic)
+## 7. Schemat bazy
 
-- `sources(id, name, url, type)`
-- `items(id, source_id, url, title_original, summary_pl, relevance_score, published_at, notified_at)`
-- `push_subscriptions(id, endpoint, keys_json, created_at)`
+Źródło prawdy: `packages/agent/sql/001_init.sql`. Poniżej skrót.
+
+- `sources(id, name, url, type, created_at)` — `id` tekstowe, prosto z `sources.json`;
+  `type` pilnowany CHECK-iem (`rss`/`atom`/`scrape`).
+- `items(id, source_id, url, title_original, summary_pl, relevance_score, published_at,
+  notified_at, created_at)` — `url` ma UNIQUE i to on realizuje deduplikację
+  (`ON CONFLICT (url) DO NOTHING`); `relevance_score` ograniczony CHECK-iem do 1-5.
+- `push_subscriptions(id, endpoint, keys_json, created_at)` — `endpoint` UNIQUE,
+  `keys_json` to `{ p256dh, auth }` prosto z `PushSubscription.toJSON()`.
+- `schema_migrations(version, applied_at)` — rejestr zastosowanych migracji, zakładany
+  automatycznie przez `migrate.ts`.
+
+Indeksy: `(relevance_score DESC, published_at DESC)` pod listę w UI oraz częściowy
+`(created_at DESC) WHERE notified_at IS NULL` pod "co jeszcze nie poszło pushem".
+
+Migracje uruchamia `pnpm agent:migrate` — każdy plik z `sql/` leci w jednej transakcji
+i jest zapisywany w `schema_migrations`, więc powtórne uruchomienie nic nie robi.
+Ten sam krok wykonuje workflow `ingest.yml` przed pobraniem źródeł.
 
 ## 8. Koszty — podsumowanie
 
 - Vercel (hosting PWA): darmowy tier (Hobby)
 - Neon (Postgres): darmowy tier
-- GitHub Actions: 2000 min/mies. za darmo na prywatnym repo — uruchomienie co 3h to
-  ułamek tego limitu
+- GitHub Actions: repo jest **publiczne** (`github.com/Blazej90/devpuls`), więc minuty są
+  darmowe i bez limitu — ograniczenie 2000 min/mies. dotyczy wyłącznie repozytoriów
+  prywatnych. Harmonogram co 3h można w razie potrzeby zagęścić bez kosztów.
 - Web Push / FCM: darmowe, bez limitu wiadomości
 - Claude API: płatne per token, ale przy skali "kilka-kilkanaście artykułów dziennie"
   realnie pojedyncze dolary miesięcznie

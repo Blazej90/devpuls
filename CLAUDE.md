@@ -88,6 +88,38 @@ rtk gain          # musi działać; jeśli "command not found" → RTK nieaktywn
 - Dotyczy to też komend projektowych: `pnpm install`, `pnpm build`, `pnpm lint`, testów
   i skryptów agenta z `packages/agent`.
 
+### Pokrycie — co faktycznie przechodzi przez proxy
+
+Zweryfikowane przez `rtk gain --history` (loguje każde przechwycone wywołanie):
+
+| Przechodzi przez RTK | Omija RTK |
+|---|---|
+| `git add`, `git status`, `git push`, `git log`, `git diff` | `git commit`, `git init` |
+| `grep`, `read`, `ls`, `find`, `lint`, testy | wszystko poza **pierwszym** członem łańcucha |
+
+**Najważniejsza zasada: jedna komenda na wywołanie.** Hook przepisuje wyłącznie pierwszy
+człon łańcucha `&&` / `;` — reszta leci na surowo, poza proxy:
+
+```bash
+# ŹLE — tylko `ls` idzie przez RTK, `cat` i `pnpm` omijają proxy
+ls -la && cat package.json && pnpm build
+
+# DOBRZE — trzy osobne wywołania, każde przechwycone
+ls -la
+cat package.json
+pnpm build
+```
+
+Skutek uboczny łańcuchów: filtr pierwszej komendy potrafi **zjeść output kolejnych** —
+wynik po prostu nie dociera. Jeśli komenda zwraca pusto wbrew oczekiwaniom, sprawdź
+najpierw, czy nie jest sklejona `&&` z inną.
+
+Wyjątki, gdzie łańcuch jest w porządku: `cd X && cmd` (samo `cd` nic nie zwraca) oraz
+komendy, które muszą działać atomowo (np. `set -e` w skrypcie migracyjnym).
+
+`git commit` i `git init` zostawiamy jak są — ich output jest krótki i istotny w całości,
+nie ma czego kompresować.
+
 ### Znany problem na Windows
 
 RTK bywa pomijane, gdy Claude Code startuje przez Git Bash / MINGW64. W takiej sytuacji
