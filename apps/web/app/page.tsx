@@ -1,9 +1,8 @@
 import { BackgroundBeams } from "@/components/ui/background-beams";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { InstallHint } from "@/components/pwa/install-hint";
 import {
   Card,
-  CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
@@ -32,17 +31,16 @@ export default function HomePage() {
           </div>
         </header>
 
+        <InstallHint />
+
         <Card>
           <CardHeader>
             <CardTitle>Powiadomienia jeszcze nie działają</CardTitle>
             <CardDescription>
-              Pipeline pobierania źródeł jest gotowy, brakuje jeszcze service workera
-              i zapisu subskrypcji Web Push.
+              Agent zbiera już wpisy i streszcza je po polsku. Brakuje zapisu
+              subskrypcji Web Push — to Faza 5.
             </CardDescription>
           </CardHeader>
-          <CardContent>
-            <Button disabled>Włącz powiadomienia</Button>
-          </CardContent>
         </Card>
       </div>
     </main>

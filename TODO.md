@@ -14,9 +14,9 @@ Agent aktualizuje ten plik na bieżąco, ale nigdy go nie commituje bez zgody
 - [x] Pierwsze ADR zaakceptowane (0001 — PWA + Web Push)
 
 ## Faza 1 — PWA shell
-- [ ] `manifest.json` + ikony
-- [ ] Service worker (obsługa push + podstawowy cache)
-- [ ] Prompt instalacji appki / instrukcja "Dodaj do ekranu głównego" na iOS
+- [x] `manifest.json` + ikony (192/512 + apple-touch-icon, generowane zastępczo)
+- [x] Service worker (obsługa push + podstawowy cache) — `public/sw.js`
+- [x] Prompt instalacji appki / instrukcja "Dodaj do ekranu głównego" na iOS — `components/pwa/install-hint.tsx`
 
 ## Faza 2 — Baza danych
 - [ ] Projekt Neon + connection string w `.env` — do zrobienia po stronie użytkownika

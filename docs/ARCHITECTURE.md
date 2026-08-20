@@ -49,12 +49,17 @@ devpuls/
 │       │   ├── layout.tsx        # <html lang="pl">, metadata, viewport
 │       │   ├── page.tsx
 │       │   └── globals.css       # @theme + tokeny kolorów (light/dark)
-│       ├── components/ui/        # button, card, badge, background-beams
+│       ├── components/
+│       │   ├── ui/               # button, card, badge, background-beams
+│       │   └── pwa/              # rejestracja sw + prompt instalacji
 │       ├── lib/
 │       │   └── utils.ts          # cn() — wymagane przez shadcn/Aceternity
 │       └── public/
 │           ├── manifest.json
-│           └── sw.js
+│           ├── sw.js             # push + notificationclick + cache powłoki
+│           ├── icon-192.png
+│           ├── icon-512.png
+│           └── apple-touch-icon.png
 ├── packages/
 │   └── agent/                    # pipeline ingestion + Claude + push
 │       ├── package.json          # skrypty `ingest` / `migrate` (tsx)
@@ -172,6 +177,18 @@ własna aplikacja OAuth Reddita.
   zbędnego round-tripu przez frontend.
 - Na iOS subskrypcje bywają zawodne po dłuższej nieaktywności appki — warto dodać w UI
   przypomnienie o ponownym udzieleniu zgody.
+- `public/sw.js` obsługuje `push` (pokazuje powiadomienie z payloadu
+  `{ title, body, url }` wysyłanego przez `packages/agent/src/push.ts`) oraz
+  `notificationclick` (fokusuje otwartą kartę zamiast mnożyć okna). `tag` ustawiony na
+  URL wpisu, więc powtórny push o tym samym artykule podmienia powiadomienie zamiast
+  dokładać kolejne.
+- Cache powłoki jest **network-first** — newsy mają być świeże, cache służy tylko za
+  awaryjne wyjście offline.
+- `beforeinstallprompt` leci raz, tuż po załadowaniu strony, **zanim React się
+  zhydratuje**. Listener w `useEffect` przegapiał to zdarzenie i przycisk instalacji
+  nigdy się nie pokazywał (zweryfikowane w Chrome). Dlatego zdarzenie łapie skrypt
+  wstrzykiwany przez `next/script` ze `strategy="beforeInteractive"`, odkłada je na
+  `window`, a `InstallHint` czyta stąd przez `useSyncExternalStore`.
 
 ## 7. Schemat bazy
 
