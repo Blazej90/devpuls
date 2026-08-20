@@ -50,14 +50,17 @@ devpuls/
 │       │   ├── layout.tsx        # <html lang="pl">, metadata, viewport, bootstrap PWA
 │       │   ├── page.tsx
 │       │   ├── globals.css       # @theme + tokeny kolorów (light/dark)
-│       │   └── api/
-│       │       └── push/subscribe/route.ts   # POST + DELETE subskrypcji
+│       │   └── api/push/
+│       │       ├── subscribe/route.ts        # POST + DELETE subskrypcji
+│       │       └── settings/route.ts         # POST odczyt, PATCH zapis ustawień
 │       ├── components/
 │       │   ├── ui/               # button, card, badge, background-beams
-│       │   └── pwa/              # rejestracja sw, prompt instalacji, zgoda na push
+│       │   ├── pwa/              # sw, prompt instalacji, zgoda i ustawienia pushy
+│       │   └── news-list.tsx     # lista wpisów z trafnością i kategoriami
 │       ├── lib/
 │       │   ├── utils.ts          # cn() — wymagane przez shadcn/Aceternity
-│       │   └── db.ts             # klient Neona dla route handlerów
+│       │   ├── db.ts             # klient Neona dla route handlerów
+│       │   └── items.ts          # zapytanie o listę wpisów
 │       └── public/
 │           ├── manifest.json
 │           ├── sw.js             # push + notificationclick + cache powłoki
@@ -69,7 +72,8 @@ devpuls/
 │       ├── package.json          # skrypty `ingest` / `migrate` (tsx)
 │       ├── tsconfig.json         # alias @/* -> packages/agent/src/*
 │       ├── sql/
-│       │   └── 001_init.sql    # schemat startowy (idempotentny DDL)
+│       │   ├── 001_init.sql     # schemat startowy (idempotentny DDL)
+│       │   └── 002_topics_and_settings.sql
 │       ├── config/
 │       │   └── sources.json
 │       └── src/
@@ -219,6 +223,12 @@ własna aplikacja OAuth Reddita.
   `keys_json` to `{ p256dh, auth }` prosto z `PushSubscription.toJSON()`.
 - `schema_migrations(version, applied_at)` — rejestr zastosowanych migracji, zakładany
   automatycznie przez `migrate.ts`.
+
+Migracja 002 dołożyła `items.topics` (kategorie od Claude, indeks GIN) oraz
+`push_subscriptions.min_relevance` i `push_subscriptions.topics`. **Próg i kategorie są
+per subskrypcja, nie w ENV agenta** — dzięki temu zmieniają się z poziomu appki, bez
+redeployu, a dwa urządzenia mogą mieć różne ustawienia. Decyzję o wysyłce podejmuje
+`push.ts`, nie `pipeline.ts`. `topics = NULL` oznacza wszystkie kategorie.
 
 Indeksy: `(relevance_score DESC, published_at DESC)` pod listę w UI oraz częściowy
 `(created_at DESC) WHERE notified_at IS NULL` pod "co jeszcze nie poszło pushem".

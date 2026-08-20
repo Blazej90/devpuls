@@ -2,6 +2,7 @@ import webpush from "web-push";
 
 import { requireEnv } from "@/config.js";
 import { deleteSubscription, listSubscriptions } from "@/db.js";
+import type { PushSubscriptionRow } from "@/db.js";
 import type { AssessedItem } from "@/types.js";
 
 let configured = false;
@@ -33,13 +34,31 @@ function toPayload(item: AssessedItem): PushPayload {
 }
 
 /**
- * Wysyła jedno powiadomienie na wpis do wszystkich zapisanych subskrypcji.
- * Zwraca liczbę subskrypcji, do których udało się dostarczyć.
+ * Czy ten wpis pasuje do ustawień danej subskrypcji.
+ *
+ * Filtr siedzi tutaj, a nie w `pipeline.ts`, bo od migracji 002 próg i
+ * kategorie są zapisane **przy subskrypcji** — dwa urządzenia mogą chcieć
+ * czegoś innego z tego samego przebiegu.
+ */
+function pasuje(item: AssessedItem, subscription: PushSubscriptionRow): boolean {
+  if (item.assessment.relevance < subscription.minRelevance) return false;
+
+  const wybrane = subscription.topics;
+  // null lub pusta lista = wszystkie kategorie.
+  if (!wybrane || wybrane.length === 0) return true;
+
+  return item.assessment.topics.some((topic) => wybrane.includes(topic));
+}
+
+/**
+ * Wysyła powiadomienie o wpisie do tych subskrypcji, których ustawienia go
+ * przepuszczają. Zwraca liczbę subskrypcji, do których udało się dostarczyć.
  */
 export async function sendPush(item: AssessedItem): Promise<number> {
   // Najpierw subskrypcje, dopiero potem klucze VAPID: bez ani jednej subskrypcji
   // nie ma czego wysyłać, więc brak kluczy nie może wywracać całego przebiegu.
-  const subscriptions = await listSubscriptions();
+  const wszystkie = await listSubscriptions();
+  const subscriptions = wszystkie.filter((subscription) => pasuje(item, subscription));
   if (subscriptions.length === 0) return 0;
 
   configure();

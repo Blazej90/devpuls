@@ -12,8 +12,14 @@ const packageRoot = path.resolve(
 
 const SOURCES_PATH = path.join(packageRoot, "config", "sources.json");
 
-/** Próg trafności, od którego wysyłamy powiadomienie (1-5). */
-export const RELEVANCE_THRESHOLD = Number(
+/**
+ * Domyślny próg trafności dla nowo utworzonych subskrypcji (1-5).
+ *
+ * Od migracji 002 faktyczny próg siedzi w kolumnie `push_subscriptions.min_relevance`
+ * i zmienia się z poziomu appki — ta stała służy już tylko za wartość startową
+ * i jest duplikatem DEFAULT-a z SQL-a.
+ */
+export const DEFAULT_RELEVANCE_THRESHOLD = Number(
   process.env.RELEVANCE_THRESHOLD ?? "4",
 );
 

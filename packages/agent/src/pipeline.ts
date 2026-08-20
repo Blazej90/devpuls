@@ -1,4 +1,4 @@
-import { loadSources, RELEVANCE_THRESHOLD } from "@/config.js";
+import { loadSources } from "@/config.js";
 import { assessItem } from "@/claude.js";
 import {
   findKnownUrls,
@@ -79,9 +79,11 @@ async function main(): Promise<void> {
     const itemId = await insertItem(assessed);
     if (itemId === null) continue;
 
-    if (assessment.relevance >= RELEVANCE_THRESHOLD) {
-      const delivered = await sendPush(assessed);
-      if (delivered > 0) notifiedIds.push(itemId);
+    // Bez progu w tym miejscu: od migracji 002 próg i kategorie są zapisane
+    // przy subskrypcji, więc decyzję podejmuje `sendPush` osobno dla każdej.
+    const delivered = await sendPush(assessed);
+    if (delivered > 0) {
+      notifiedIds.push(itemId);
       console.log(
         `[push] "${item.title}" (trafność ${assessment.relevance}) → ${delivered} subskrypcji`,
       );
@@ -92,8 +94,7 @@ async function main(): Promise<void> {
 
   console.log(
     `Gotowe w ${Math.round((Date.now() - startedAt) / 1000)}s — ` +
-      `ocenionych ${assessedCount}, powiadomień ${notifiedIds.length}, ` +
-      `próg trafności ${RELEVANCE_THRESHOLD}`,
+      `ocenionych ${assessedCount}, powiadomień ${notifiedIds.length}`,
   );
 }
 

@@ -45,8 +45,8 @@ Agent aktualizuje ten plik na bieżąco, ale nigdy go nie commituje bez zgody
 - [ ] Sekrety w GitHub Actions (Claude API key, connection string Neon, klucze VAPID)
 
 ## Faza 7 — UI
-- [ ] Lista dostarczonych newsów w appce
-- [ ] Ustawienia (próg trafności, wybór kategorii)
+- [x] Lista dostarczonych newsów w appce — `components/news-list.tsx`, trafność + kategorie + źródło
+- [x] Ustawienia (próg trafności, wybór kategorii) — per subskrypcja w bazie, respektowane przez agenta
 
 ## Faza 8 — Dopracowanie
 - [ ] Obsługa źródeł bez RSS (np. Anthropic News) przez scraping + Claude

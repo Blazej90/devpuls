@@ -20,6 +20,10 @@ function db() {
 export interface PushSubscriptionRow {
   endpoint: string;
   keysJson: { p256dh: string; auth: string };
+  /** Próg trafności tej subskrypcji (1-5). */
+  minRelevance: number;
+  /** Wybrane kategorie; `null` = wszystkie. */
+  topics: string[] | null;
 }
 
 /** Upsert źródeł z `sources.json`, żeby `items.source_id` miał na co wskazywać. */
@@ -54,10 +58,10 @@ export async function findKnownUrls(urls: string[]): Promise<Set<string>> {
 export async function insertItem(item: AssessedItem): Promise<number | null> {
   const rows = (await db()`
     INSERT INTO items
-      (source_id, url, title_original, summary_pl, relevance_score, published_at)
+      (source_id, url, title_original, summary_pl, relevance_score, published_at, topics)
     VALUES
       (${item.sourceId}, ${item.url}, ${item.title}, ${item.assessment.summaryPl},
-       ${item.assessment.relevance}, ${item.publishedAt})
+       ${item.assessment.relevance}, ${item.publishedAt}, ${item.assessment.topics})
     ON CONFLICT (url) DO NOTHING
     RETURNING id
   `) as { id: number }[];
@@ -75,10 +79,20 @@ export async function markNotified(itemIds: number[]): Promise<void> {
 
 export async function listSubscriptions(): Promise<PushSubscriptionRow[]> {
   const rows = (await db()`
-    SELECT endpoint, keys_json FROM push_subscriptions
-  `) as { endpoint: string; keys_json: PushSubscriptionRow["keysJson"] }[];
+    SELECT endpoint, keys_json, min_relevance, topics FROM push_subscriptions
+  `) as {
+    endpoint: string;
+    keys_json: PushSubscriptionRow["keysJson"];
+    min_relevance: number;
+    topics: string[] | null;
+  }[];
 
-  return rows.map((row) => ({ endpoint: row.endpoint, keysJson: row.keys_json }));
+  return rows.map((row) => ({
+    endpoint: row.endpoint,
+    keysJson: row.keys_json,
+    minRelevance: row.min_relevance,
+    topics: row.topics,
+  }));
 }
 
 /** Subskrypcja odrzucona przez push service (410/404) — nie ma po co jej trzymać. */
