@@ -1,0 +1,16 @@
+{
+  "name": "devpuls",
+  "private": true,
+  "version": "0.1.0",
+  "packageManager": "pnpm@11.18.0",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "pnpm --filter web dev",
+    "build": "pnpm --filter web build",
+    "start": "pnpm --filter web start",
+    "lint": "pnpm --recursive lint",
+    "agent:ingest": "pnpm --filter @devpuls/agent ingest"
+  }
+}

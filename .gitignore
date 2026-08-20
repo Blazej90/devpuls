@@ -1,0 +1,22 @@
+# zależności
+node_modules/
+.pnpm-store/
+
+# build Next.js
+.next/
+out/
+build/
+next-env.d.ts
+*.tsbuildinfo
+
+# środowisko — klucze VAPID, Claude API, connection string Neon
+.env
+.env.*
+!.env.example
+
+# hosting
+.vercel/
+
+# logi / system
+*.log
+.DS_Store

@@ -1,0 +1,9 @@
+packages:
+  - "apps/*"
+  - "packages/*"
+
+# Skrypty postinstall wymagają jawnej zgody (pnpm 11).
+# unrs-resolver (tranzytywnie przez eslint-plugin-import-x) nie potrzebuje builda —
+# binarki dla platformy przychodzą jako optionalDependencies.
+allowBuilds:
+  unrs-resolver: false

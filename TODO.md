@@ -1,0 +1,50 @@
+# TODO — DevPuls
+
+Legenda: `[ ]` do zrobienia, `[~]` w trakcie, `[x]` zrobione.
+Agent aktualizuje ten plik na bieżąco, ale nigdy go nie commituje bez zgody
+(patrz `CLAUDE.md`, zasada 1).
+
+## Faza 0 — Fundament projektu
+- [x] Inicjalizacja monorepo (`pnpm-workspace.yaml`, root `package.json`)
+- [x] Next.js app w `apps/web` (TypeScript, App Router) — strony/layout + ESLint flat config
+- [x] Konfiguracja Tailwind CSS v4 (`postcss.config.mjs`, `app/globals.css`)
+- [x] Konfiguracja aliasów `@/*` (`tsconfig.json`) + `components.json` dla shadcn
+- [ ] Konfiguracja shadcn/ui + Aceternity UI (instalacja pierwszych komponentów)
+- [ ] Szkielet `packages/agent` (src/sources, pipeline.ts, claude.ts, push.ts, db.ts)
+- [x] Pierwsze ADR zaakceptowane (0001 — PWA + Web Push)
+
+## Faza 1 — PWA shell
+- [ ] `manifest.json` + ikony
+- [ ] Service worker (obsługa push + podstawowy cache)
+- [ ] Prompt instalacji appki / instrukcja "Dodaj do ekranu głównego" na iOS
+
+## Faza 2 — Baza danych
+- [ ] Projekt Neon + connection string w `.env`
+- [ ] Migracja: tabele `sources`, `items`, `push_subscriptions`
+
+## Faza 3 — Ingestion (RSS/Atom)
+- [ ] Fetcher RSS/Atom (`packages/agent/src/sources/rss.ts`, `atom.ts`)
+- [ ] Wczytywanie `sources.json`
+- [ ] Deduplikacja po URL wpisu
+
+## Faza 4 — Claude: filtr trafności + streszczenie PL
+- [ ] Prompt oceniający trafność (1-5) względem profilu zainteresowań
+- [ ] Prompt generujący streszczenie PL + zachowanie linku źródłowego
+- [ ] Konfigurowalny próg trafności
+
+## Faza 5 — Web Push
+- [ ] Wygenerowanie kluczy VAPID
+- [ ] Endpoint `POST /api/push/subscribe` (zapis subskrypcji)
+- [ ] Wysyłka push z `packages/agent` (biblioteka `web-push`)
+
+## Faza 6 — Harmonogram
+- [ ] `.github/workflows/ingest.yml` (cron co kilka godzin)
+- [ ] Sekrety w GitHub Actions (Claude API key, connection string Neon, klucze VAPID)
+
+## Faza 7 — UI
+- [ ] Lista dostarczonych newsów w appce
+- [ ] Ustawienia (próg trafności, wybór kategorii)
+
+## Faza 8 — Dopracowanie
+- [ ] Obsługa źródeł bez RSS (np. Anthropic News) przez scraping + Claude
+- [ ] Monitoring błędów pipeline'u

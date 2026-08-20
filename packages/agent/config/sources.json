@@ -1,0 +1,15 @@
+{
+  "sources": [
+    { "id": "hn", "name": "Hacker News", "type": "rss", "url": "https://news.ycombinator.com/rss", "topics": ["general"] },
+    { "id": "reddit-typescript", "name": "Reddit r/typescript", "type": "rss", "url": "https://www.reddit.com/r/typescript/.rss", "topics": ["typescript"] },
+    { "id": "reddit-reactjs", "name": "Reddit r/reactjs", "type": "rss", "url": "https://www.reddit.com/r/reactjs/.rss", "topics": ["react"] },
+    { "id": "reddit-localllama", "name": "Reddit r/LocalLLaMA", "type": "rss", "url": "https://www.reddit.com/r/LocalLLaMA/.rss", "topics": ["ai"] },
+    { "id": "ts-releases", "name": "TypeScript - GitHub Releases", "type": "atom", "url": "https://github.com/microsoft/TypeScript/releases.atom", "topics": ["typescript"] },
+    { "id": "react-releases", "name": "React - GitHub Releases", "type": "atom", "url": "https://github.com/facebook/react/releases.atom", "topics": ["react"] },
+    { "id": "ts-blog", "name": "TypeScript Blog", "type": "rss", "url": "https://devblogs.microsoft.com/typescript/feed/", "topics": ["typescript"] },
+    { "id": "openai-news", "name": "OpenAI News", "type": "rss", "url": "https://openai.com/news/rss.xml", "topics": ["ai"] },
+    { "id": "deepmind-blog", "name": "Google DeepMind Blog", "type": "rss", "url": "https://deepmind.google/blog/feed/basic/", "topics": ["ai"] },
+    { "id": "hf-blog", "name": "Hugging Face Blog", "type": "rss", "url": "https://huggingface.co/blog/feed.xml", "topics": ["ai"] },
+    { "id": "anthropic-news", "name": "Anthropic News", "type": "scrape", "url": "https://www.anthropic.com/news", "topics": ["ai"], "note": "Brak oficjalnego RSS - wymaga scrapingu strony i wyciagniecia listy wpisow (np. przez Claude)" }
+  ]
+}

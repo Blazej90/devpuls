@@ -1,0 +1,6 @@
+{
+  "name": "@devpuls/agent",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module"
+}
