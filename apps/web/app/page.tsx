@@ -1,12 +1,7 @@
 import { BackgroundBeams } from "@/components/ui/background-beams";
 import { Badge } from "@/components/ui/badge";
 import { InstallHint } from "@/components/pwa/install-hint";
-import {
-  Card,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { PushToggle } from "@/components/pwa/push-toggle";
 
 const TOPICS = ["TypeScript", "React", "JavaScript", "Fullstack", "AI"] as const;
 
@@ -32,16 +27,7 @@ export default function HomePage() {
         </header>
 
         <InstallHint />
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Powiadomienia jeszcze nie działają</CardTitle>
-            <CardDescription>
-              Agent zbiera już wpisy i streszcza je po polsku. Brakuje zapisu
-              subskrypcji Web Push — to Faza 5.
-            </CardDescription>
-          </CardHeader>
-        </Card>
+        <PushToggle />
       </div>
     </main>
   );

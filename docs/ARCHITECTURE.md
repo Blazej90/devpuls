@@ -28,7 +28,7 @@ devpuls/
 ├── CLAUDE.md
 ├── TODO.md
 ├── .gitignore
-├── .env.example                  # ANTHROPIC_API_KEY, DATABASE_URL, klucze VAPID
+├── .env.example                  # agent: ANTHROPIC_API_KEY, DATABASE_URL, VAPID
 ├── pnpm-workspace.yaml           # workspaces + allowBuilds (zgody na postinstall)
 ├── package.json                  # root: packageManager pnpm, skrypty proxujące
 ├── pnpm-lock.yaml
@@ -45,15 +45,19 @@ devpuls/
 │       ├── postcss.config.mjs    # @tailwindcss/postcss (Tailwind v4)
 │       ├── eslint.config.mjs     # flat config, eslint-config-next
 │       ├── components.json       # config shadcn CLI (style new-york, aliasy)
+│       ├── .env.example          # web: NEXT_PUBLIC_VAPID_PUBLIC_KEY, DATABASE_URL
 │       ├── app/
-│       │   ├── layout.tsx        # <html lang="pl">, metadata, viewport
+│       │   ├── layout.tsx        # <html lang="pl">, metadata, viewport, bootstrap PWA
 │       │   ├── page.tsx
-│       │   └── globals.css       # @theme + tokeny kolorów (light/dark)
+│       │   ├── globals.css       # @theme + tokeny kolorów (light/dark)
+│       │   └── api/
+│       │       └── push/subscribe/route.ts   # POST + DELETE subskrypcji
 │       ├── components/
 │       │   ├── ui/               # button, card, badge, background-beams
-│       │   └── pwa/              # rejestracja sw + prompt instalacji
+│       │   └── pwa/              # rejestracja sw, prompt instalacji, zgoda na push
 │       ├── lib/
-│       │   └── utils.ts          # cn() — wymagane przez shadcn/Aceternity
+│       │   ├── utils.ts          # cn() — wymagane przez shadcn/Aceternity
+│       │   └── db.ts             # klient Neona dla route handlerów
 │       └── public/
 │           ├── manifest.json
 │           ├── sw.js             # push + notificationclick + cache powłoki
@@ -170,13 +174,25 @@ własna aplikacja OAuth Reddita.
 
 - Manifest + "Dodaj do ekranu głównego" jest **wymagany na iOS** (Safari), żeby push
   działał — na Androidzie (Chrome) działa też z otwartej karty.
-- `POST /api/push/subscribe` w Next.js zapisuje subskrypcję przeglądarki do Neon.
+- `POST /api/push/subscribe` w Next.js zapisuje subskrypcję do Neona, `DELETE` ją usuwa.
+  Body walidowane zodem (endpoint jest publiczny), zapis robi upsert po `endpoint`,
+  więc ponowne udzielenie zgody odświeża klucze zamiast mnożyć wiersze.
+- **Klucze VAPID są w dwóch miejscach i to jest zamierzone.** Klucz prywatny plus
+  publiczny w rootowym `.env` (agent, sekrety GitHub Actions); sam publiczny jako
+  `NEXT_PUBLIC_VAPID_PUBLIC_KEY` w `apps/web/.env.local` (przeglądarka, env Vercela).
+  Next czyta env wyłącznie z katalogu swojego projektu, a i tak na produkcji te dwa
+  środowiska są rozdzielone.
 - Klucze VAPID generowane raz, trzymane jako sekrety (Vercel env + GitHub Actions secret),
   nigdy w repo.
 - Wysyłkę robi `packages/agent` (z poziomu GitHub Actions), nie Next.js API — unika
   zbędnego round-tripu przez frontend.
 - Na iOS subskrypcje bywają zawodne po dłuższej nieaktywności appki — warto dodać w UI
   przypomnienie o ponownym udzieleniu zgody.
+- **Debugowanie na Windowsie:** dostarczone powiadomienie może nie pokazać dymka, jeśli
+  włączone jest „Nie przeszkadzać" albo Chrome/DevPuls ma wyłączone banery w Ustawieniach
+  → System → Powiadomienia. Trafia wtedy do centrum powiadomień (`Win + N`) i nadal jest
+  widoczne w `registration.getNotifications()`. Zanim uznasz, że push nie działa, sprawdź
+  właśnie to — `getNotifications()` odróżnia „nie dotarło" od „nie wyświetlono".
 - `public/sw.js` obsługuje `push` (pokazuje powiadomienie z payloadu
   `{ title, body, url }` wysyłanego przez `packages/agent/src/push.ts`) oraz
   `notificationclick` (fokusuje otwartą kartę zamiast mnożyć okna). `tag` ustawiony na

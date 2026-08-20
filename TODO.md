@@ -36,9 +36,9 @@ Agent aktualizuje ten plik na bieżąco, ale nigdy go nie commituje bez zgody
 - [x] Konfigurowalny próg trafności (`RELEVANCE_THRESHOLD`)
 
 ## Faza 5 — Web Push
-- [ ] Wygenerowanie kluczy VAPID
-- [ ] Endpoint `POST /api/push/subscribe` (zapis subskrypcji)
-- [ ] Wysyłka push z `packages/agent` (biblioteka `web-push`)
+- [x] Wygenerowanie kluczy VAPID — w `.env` (agent) i `apps/web/.env.local` (przeglądarka)
+- [x] Endpoint `POST /api/push/subscribe` + `DELETE` (upsert po `endpoint`, walidacja zod)
+- [x] Wysyłka push z `packages/agent` (biblioteka `web-push`)
 
 ## Faza 6 — Harmonogram
 - [ ] `.github/workflows/ingest.yml` (cron co kilka godzin)
