@@ -16,7 +16,7 @@ Aplikacja typu PWA, która:
 | Komponenty UI | shadcn/ui (styl `new-york`) + Aceternity UI | gotowe komponenty zamiast pisania od zera |
 | Aliasy importów | `@/*` → `apps/web/*` | ustawione w `tsconfig.json`, zgodne z `components.json` |
 | Baza danych | Neon (Postgres, serverless) | |
-| LLM | Claude API | ocena trafności + streszczenie PL w jednym wywołaniu |
+| LLM | Claude API — `claude-haiku-4-5` | ocena trafności + streszczenie PL w jednym wywołaniu; model nadpisywalny przez `CLAUDE_MODEL` |
 | Powiadomienia | Web Push API (VAPID) + biblioteka `web-push` | bez Firebase; Android — Chrome, iOS — Safari 16.4+ jako PWA dodana do ekranu głównego |
 | Harmonogram | GitHub Actions (`schedule` + `workflow_dispatch`) | Vercel Cron na planie Hobby pozwala tylko na 1 uruchomienie/dzień, więc harmonogram idzie przez GitHub Actions |
 | Pakiety | pnpm workspaces | monorepo: `apps/web` + `packages/agent` |
@@ -66,6 +66,7 @@ devpuls/
 │       └── src/
 │           ├── sources/
 │           │   ├── index.ts      # dispatch po `type`
+│           │   ├── http.ts       # fetch + retry na 429/5xx
 │           │   ├── rss.ts
 │           │   ├── atom.ts
 │           │   └── scrape.ts     # HTML -> JSON przez Claude
@@ -100,8 +101,12 @@ devpuls/
   (`Assessment`), współdzielone przez wszystkie moduły.
 - `src/config.ts` — wczytanie `config/sources.json` + progi z ENV
   (`RELEVANCE_THRESHOLD`, `MAX_ITEMS_PER_SOURCE`) i `requireEnv()`.
-- `src/anthropic.ts` — leniwie tworzony klient Claude i stała `MODEL`, wspólne dla
-  `claude.ts` i `sources/scrape.ts`.
+- `src/anthropic.ts` — leniwie tworzony klient Claude i stała `MODEL` (domyślnie
+  `claude-haiku-4-5`, nadpisywalna przez `CLAUDE_MODEL`), wspólne dla `claude.ts`
+  i `sources/scrape.ts`. Haiku 4.5 wybrany świadomie: klasyfikacja 1-5 plus dwa-trzy
+  zdania streszczenia nie potrzebują mocniejszego modelu, a input/output jest ok. 5x
+  tańszy niż w klasie Opus. **Haiku nie przyjmuje `output_config.effort`** — ten
+  parametr zwraca 400, więc oba wywołania przekazują wyłącznie `format`.
 - `src/sources/index.ts` — dispatch po polu `type` ze źródła na właściwy fetcher.
 - Uruchamiany przez `tsx` jako pojedynczy skrypt Node.js z
   `.github/workflows/ingest.yml` — nie jako długo działający serwer.
@@ -111,9 +116,9 @@ devpuls/
 | Źródło | Typ | URL |
 |---|---|---|
 | Hacker News | rss | `https://news.ycombinator.com/rss` |
-| Reddit r/typescript | rss | `https://www.reddit.com/r/typescript/.rss` |
-| Reddit r/reactjs | rss | `https://www.reddit.com/r/reactjs/.rss` |
-| Reddit r/LocalLLaMA | rss | `https://www.reddit.com/r/LocalLLaMA/.rss` |
+| Reddit r/typescript | atom | `https://www.reddit.com/r/typescript/.rss` |
+| Reddit r/reactjs | atom | `https://www.reddit.com/r/reactjs/.rss` |
+| Reddit r/LocalLLaMA | atom | `https://www.reddit.com/r/LocalLLaMA/.rss` |
 | TypeScript — GitHub Releases | atom | `https://github.com/microsoft/TypeScript/releases.atom` |
 | React — GitHub Releases | atom | `https://github.com/facebook/react/releases.atom` |
 | TypeScript Blog | rss | `https://devblogs.microsoft.com/typescript/feed/` |
@@ -123,6 +128,19 @@ devpuls/
 | Anthropic News | scrape | `https://www.anthropic.com/news` (brak oficjalnego RSS) |
 
 Pełny, maszynowo czytelny config: `packages/agent/config/sources.json`.
+
+**Uwaga o Reddicie:** endpoint `.rss` Reddita serwuje w rzeczywistości **Atom**
+(`<feed xmlns="http://www.w3.org/2005/Atom">`), mimo rozszerzenia w URL-u. Dlatego te
+trzy źródła mają `"type": "atom"` — przy `"rss"` parser nie znajduje `rss.channel.item`
+i zwraca zero wpisów bez żadnego błędu.
+
+Reddit agresywnie limituje niezalogowany ruch per IP i potrafi zwrócić 429. Łagodzimy to
+dwojako: `sources/http.ts` ponawia (3 próby, backoff 1s/2s, honorując `Retry-After`),
+a `pipeline.ts` pobiera źródła z tego samego hosta sekwencyjnie zamiast równolegle.
+Mimo to pojedynczy feed potrafi się nie dociągnąć — to nie jest błąd pipeline'u, kolejny
+przebieg go nadrobi. W GitHub Actions ryzyko jest wyższe niż lokalnie, bo Reddit ostrzej
+traktuje adresy z datacenter; gdyby te źródła zaczęły padać stale, rozwiązaniem jest
+własna aplikacja OAuth Reddita.
 
 ## 5a. Aliasy i Tailwind — konwencja
 

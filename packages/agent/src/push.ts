@@ -37,10 +37,12 @@ function toPayload(item: AssessedItem): PushPayload {
  * Zwraca liczbę subskrypcji, do których udało się dostarczyć.
  */
 export async function sendPush(item: AssessedItem): Promise<number> {
-  configure();
-
+  // Najpierw subskrypcje, dopiero potem klucze VAPID: bez ani jednej subskrypcji
+  // nie ma czego wysyłać, więc brak kluczy nie może wywracać całego przebiegu.
   const subscriptions = await listSubscriptions();
   if (subscriptions.length === 0) return 0;
+
+  configure();
 
   const payload = JSON.stringify(toPayload(item));
 

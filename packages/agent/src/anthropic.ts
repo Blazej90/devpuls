@@ -15,4 +15,12 @@ export function getAnthropic(): Anthropic {
   return client;
 }
 
-export const MODEL = "claude-opus-5";
+/**
+ * Haiku 4.5 — klasyfikacja 1-5 plus 2-3 zdania streszczenia to zadanie,
+ * na którym mocniejszy model nie zarabia na siebie (5x tańszy input/output
+ * niż Opus). 200K kontekstu z zapasem starcza nawet na scraping HTML.
+ *
+ * Uwaga przy podmianie: Haiku 4.5 nie przyjmuje `output_config.effort`
+ * — ustawienie go kończy się błędem 400.
+ */
+export const MODEL = process.env.CLAUDE_MODEL ?? "claude-haiku-4-5";

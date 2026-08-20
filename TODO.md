@@ -26,14 +26,14 @@ Agent aktualizuje ten plik na bieżąco, ale nigdy go nie commituje bez zgody
       Zastosowanie na żywej bazie czeka na `DATABASE_URL`.
 
 ## Faza 3 — Ingestion (RSS/Atom)
-- [ ] Fetcher RSS/Atom (`packages/agent/src/sources/rss.ts`, `atom.ts`)
-- [ ] Wczytywanie `sources.json`
-- [ ] Deduplikacja po URL wpisu
+- [x] Fetcher RSS/Atom (`packages/agent/src/sources/rss.ts`, `atom.ts`) — wspólny `http.ts` z retry na 429/5xx
+- [x] Wczytywanie `sources.json`
+- [x] Deduplikacja po URL wpisu — UNIQUE + jedno zapytanie na przebieg
 
 ## Faza 4 — Claude: filtr trafności + streszczenie PL
-- [ ] Prompt oceniający trafność (1-5) względem profilu zainteresowań
-- [ ] Prompt generujący streszczenie PL + zachowanie linku źródłowego
-- [ ] Konfigurowalny próg trafności
+- [x] Prompt oceniający trafność (1-5) względem profilu zainteresowań
+- [x] Prompt generujący streszczenie PL + zachowanie linku źródłowego
+- [x] Konfigurowalny próg trafności (`RELEVANCE_THRESHOLD`)
 
 ## Faza 5 — Web Push
 - [ ] Wygenerowanie kluczy VAPID

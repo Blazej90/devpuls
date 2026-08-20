@@ -42,10 +42,8 @@ export async function assessItem(item: NormalizedItem): Promise<Assessment | nul
   const parsed = await getAnthropic().messages.parse({
     model: MODEL,
     max_tokens: 1024,
-    output_config: {
-      effort: "low",
-      format: zodOutputFormat(AssessmentSchema),
-    },
+    // Bez `effort` — Haiku 4.5 odrzuca ten parametr błędem 400.
+    output_config: { format: zodOutputFormat(AssessmentSchema) },
     system: SYSTEM_PROMPT,
     messages: [
       {

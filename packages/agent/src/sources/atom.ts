@@ -1,5 +1,6 @@
 import { XMLParser } from "fast-xml-parser";
 
+import { fetchFeedText } from "@/sources/http.js";
 import { MAX_ITEMS_PER_SOURCE } from "@/config.js";
 import type { NormalizedItem, SourceConfig } from "@/types.js";
 
@@ -45,15 +46,7 @@ function pickHref(link: AtomEntry["link"]): string {
 }
 
 export async function fetchAtom(source: SourceConfig): Promise<NormalizedItem[]> {
-  const response = await fetch(source.url, {
-    headers: { "user-agent": "DevPuls/0.1 (+https://github.com/Blazej90/devpuls)" },
-  });
-
-  if (!response.ok) {
-    throw new Error(`${source.id}: HTTP ${response.status} z ${source.url}`);
-  }
-
-  const xml = await response.text();
+  const xml = await fetchFeedText(source);
   const doc = parser.parse(xml) as {
     feed?: { entry?: AtomEntry | AtomEntry[] };
   };

@@ -1,9 +1,9 @@
 {
   "sources": [
     { "id": "hn", "name": "Hacker News", "type": "rss", "url": "https://news.ycombinator.com/rss", "topics": ["general"] },
-    { "id": "reddit-typescript", "name": "Reddit r/typescript", "type": "rss", "url": "https://www.reddit.com/r/typescript/.rss", "topics": ["typescript"] },
-    { "id": "reddit-reactjs", "name": "Reddit r/reactjs", "type": "rss", "url": "https://www.reddit.com/r/reactjs/.rss", "topics": ["react"] },
-    { "id": "reddit-localllama", "name": "Reddit r/LocalLLaMA", "type": "rss", "url": "https://www.reddit.com/r/LocalLLaMA/.rss", "topics": ["ai"] },
+    { "id": "reddit-typescript", "name": "Reddit r/typescript", "type": "atom", "url": "https://www.reddit.com/r/typescript/.rss", "topics": ["typescript"] },
+    { "id": "reddit-reactjs", "name": "Reddit r/reactjs", "type": "atom", "url": "https://www.reddit.com/r/reactjs/.rss", "topics": ["react"] },
+    { "id": "reddit-localllama", "name": "Reddit r/LocalLLaMA", "type": "atom", "url": "https://www.reddit.com/r/LocalLLaMA/.rss", "topics": ["ai"] },
     { "id": "ts-releases", "name": "TypeScript - GitHub Releases", "type": "atom", "url": "https://github.com/microsoft/TypeScript/releases.atom", "topics": ["typescript"] },
     { "id": "react-releases", "name": "React - GitHub Releases", "type": "atom", "url": "https://github.com/facebook/react/releases.atom", "topics": ["react"] },
     { "id": "ts-blog", "name": "TypeScript Blog", "type": "rss", "url": "https://devblogs.microsoft.com/typescript/feed/", "topics": ["typescript"] },

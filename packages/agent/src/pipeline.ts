@@ -8,7 +8,7 @@ import {
 } from "@/db.js";
 import { sendPush } from "@/push.js";
 import { fetchSource } from "@/sources/index.js";
-import type { AssessedItem, NormalizedItem } from "@/types.js";
+import type { AssessedItem, NormalizedItem, SourceConfig } from "@/types.js";
 
 /**
  * Orkiestracja jednego przebiegu:
@@ -22,27 +22,39 @@ async function main(): Promise<void> {
   const sources = await loadSources();
   await syncSources(sources);
 
+  // Źródła z tego samego hosta lecą po kolei, różne hosty równolegle.
+  // Reddit odbija 429, gdy trzy jego feedy uderzą jednocześnie z tego samego IP.
+  const byHost = new Map<string, SourceConfig[]>();
+  for (const source of sources) {
+    const host = new URL(source.url).hostname;
+    const group = byHost.get(host);
+    if (group) group.push(source);
+    else byHost.set(host, [source]);
+  }
+
   // Jedno źródło, które padnie, nie może zabrać ze sobą pozostałych.
-  const fetched = await Promise.allSettled(
-    sources.map(async (source) => ({
-      source,
-      items: await fetchSource(source),
-    })),
+  const grouped = await Promise.all(
+    [...byHost.values()].map(async (group) => {
+      const results: { source: SourceConfig; items: NormalizedItem[] | null }[] = [];
+      for (const source of group) {
+        try {
+          results.push({ source, items: await fetchSource(source) });
+        } catch (error: unknown) {
+          console.error(`[${source.id}] pobieranie nieudane:`, error);
+          results.push({ source, items: null });
+        }
+      }
+      return results;
+    }),
   );
 
   const candidates: NormalizedItem[] = [];
 
-  for (const [index, result] of fetched.entries()) {
-    const source = sources[index];
-    if (!source) continue;
+  for (const { source, items } of grouped.flat()) {
+    if (items === null) continue;
 
-    if (result.status === "rejected") {
-      console.error(`[${source.id}] pobieranie nieudane:`, result.reason);
-      continue;
-    }
-
-    console.log(`[${source.id}] pobrano ${result.value.items.length} wpisów`);
-    candidates.push(...result.value.items);
+    console.log(`[${source.id}] pobrano ${items.length} wpisów`);
+    candidates.push(...items);
   }
 
   const known = await findKnownUrls(candidates.map((item) => item.url));

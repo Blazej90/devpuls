@@ -58,10 +58,8 @@ export async function fetchScrape(
   const parsed = await getAnthropic().messages.parse({
     model: MODEL,
     max_tokens: 4096,
-    output_config: {
-      effort: "low",
-      format: zodOutputFormat(ScrapedEntries),
-    },
+    // Bez `effort` — Haiku 4.5 odrzuca ten parametr błędem 400.
+    output_config: { format: zodOutputFormat(ScrapedEntries) },
     system:
       "Wyciągasz listę wpisów blogowych/newsowych ze strony indeksowej. " +
       "Zwracaj wyłącznie wpisy faktycznie obecne w podanym HTML — nie zgaduj i nie dopisuj własnych. " +
