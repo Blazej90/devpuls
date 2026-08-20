@@ -245,6 +245,8 @@ Ten sam krok wykonuje workflow `ingest.yml` przed pobraniem źródeł.
   darmowe i bez limitu — ograniczenie 2000 min/mies. dotyczy wyłącznie repozytoriów
   prywatnych. Harmonogram co 3h można w razie potrzeby zagęścić bez kosztów.
 - Web Push / FCM: darmowe, bez limitu wiadomości
-- Claude API: płatne per token, ale przy skali "kilka-kilkanaście artykułów dziennie"
-  realnie pojedyncze dolary miesięcznie
+- Claude API: przy Haiku 4.5 jeden wpis to ~$0,0015 (ok. 500 tokenów wejścia,
+  200 wyjścia). Przy cronie co 3h wychodziło $5-12 miesięcznie — wbrew wcześniejszemu
+  zapisowi o "pojedynczych dolarach". Po przejściu na przebieg co 2 dni (ADR-0002)
+  to rząd wielkości mniej
 - Brak opłat Apple/Google — świadomie pomijamy sklepy na tym etapie (patrz ADR-0001)

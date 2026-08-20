@@ -2,19 +2,22 @@ name: Ingest news
 
 on:
   schedule:
-    - cron: "0 */3 * * *"
+    # Co 2 dni o 7:00 UTC (ADR-0002). `*/2` na dniu miesiąca resetuje się
+    # na przełomie miesiąca, więc raz na jakiś czas wypadną dwa dni pod rząd —
+    # świadomie akceptujemy tę nieregularność zamiast własnego schedulera.
+    - cron: "0 7 */2 * *"
   workflow_dispatch: {}
 
 jobs:
   ingest:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      # bez `version:` - action-setup v4 czyta pole `packageManager` z root package.json
-      - uses: pnpm/action-setup@v4
+      # bez `version:` - action-setup czyta pole `packageManager` z root package.json
+      - uses: pnpm/action-setup@v6
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: "pnpm"

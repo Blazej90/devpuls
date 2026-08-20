@@ -64,16 +64,20 @@ export async function insertItem(item: AssessedItem): Promise<number | null> {
        ${item.assessment.relevance}, ${item.publishedAt}, ${item.assessment.topics})
     ON CONFLICT (url) DO NOTHING
     RETURNING id
-  `) as { id: number }[];
+  `) as { id: string }[];
 
-  return rows[0]?.id ?? null;
+  // BIGINT wraca ze sterownika jako string — konwertujemy na granicy modułu,
+  // żeby reszta kodu nie musiała o tym pamiętać.
+  const id = rows[0]?.id;
+  return id === undefined ? null : Number(id);
 }
 
 export async function markNotified(itemIds: number[]): Promise<void> {
   if (itemIds.length === 0) return;
 
+  // Porównanie po stringach — patrz komentarz przy `insertItem`.
   await db()`
-    UPDATE items SET notified_at = NOW() WHERE id = ANY(${itemIds})
+    UPDATE items SET notified_at = NOW() WHERE id = ANY(${itemIds.map(String)})
   `;
 }
 

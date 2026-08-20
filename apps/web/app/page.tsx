@@ -3,16 +3,20 @@ import { Badge } from "@/components/ui/badge";
 import { InstallHint } from "@/components/pwa/install-hint";
 import { PushSettings } from "@/components/pwa/push-settings";
 import { PushToggle } from "@/components/pwa/push-toggle";
-import { NewsList } from "@/components/news-list";
-import { listRecentItems } from "@/lib/items";
+import { Inbox } from "@/components/inbox";
+import { countUnread, listRead, listUnread } from "@/lib/items";
 
 const TOPICS = ["TypeScript", "React", "JavaScript", "Fullstack", "AI"] as const;
 
-/** Lista czyta bazę przy każdym wejściu — nowe wpisy mają być od razu widoczne. */
+/** Skrzynka czyta bazę przy każdym wejściu — po powiadomieniu ma być aktualna. */
 export const dynamic = "force-dynamic";
 
 export default async function HomePage() {
-  const items = await listRecentItems();
+  const [nieprzeczytane, przeczytane, liczba] = await Promise.all([
+    listUnread(),
+    listRead(),
+    countUnread(),
+  ]);
 
   return (
     <main className="mx-auto flex w-full max-w-2xl flex-col gap-8 px-6 py-12">
@@ -21,17 +25,20 @@ export default async function HomePage() {
       <header className="relative -mx-6 -mt-12 overflow-hidden px-6 pt-12 pb-8">
         <BackgroundBeams className="pointer-events-none" />
         <div className="relative z-10 space-y-4">
-        <h1 className="text-4xl font-semibold tracking-tight">DevPuls</h1>
-        <p className="text-muted-foreground text-balance">
-          Nowinki techniczne przefiltrowane pod kątem trafności i streszczone po
-          polsku, z linkiem do oryginalnego źródła.
-        </p>
-        <div className="flex flex-wrap gap-2">
-          {TOPICS.map((topic) => (
-            <Badge key={topic} variant="secondary">
-              {topic}
-            </Badge>
-          ))}
+          <div className="flex items-center gap-3">
+            <h1 className="text-4xl font-semibold tracking-tight">DevPuls</h1>
+            {liczba > 0 && <Badge>{liczba} nowych</Badge>}
+          </div>
+          <p className="text-muted-foreground text-balance">
+            Nowinki techniczne przefiltrowane pod kątem trafności i streszczone po
+            polsku, z linkiem do oryginalnego źródła.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {TOPICS.map((topic) => (
+              <Badge key={topic} variant="secondary">
+                {topic}
+              </Badge>
+            ))}
           </div>
         </div>
       </header>
@@ -40,10 +47,7 @@ export default async function HomePage() {
       <PushToggle />
       <PushSettings />
 
-      <section className="space-y-4">
-        <h2 className="text-lg font-medium">Ostatnie wpisy</h2>
-        <NewsList items={items} />
-      </section>
+      <Inbox nieprzeczytane={nieprzeczytane} przeczytane={przeczytane} />
     </main>
   );
 }

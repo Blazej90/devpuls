@@ -41,8 +41,8 @@ Agent aktualizuje ten plik na bieżąco, ale nigdy go nie commituje bez zgody
 - [x] Wysyłka push z `packages/agent` (biblioteka `web-push`)
 
 ## Faza 6 — Harmonogram
-- [ ] `.github/workflows/ingest.yml` (cron co kilka godzin)
-- [ ] Sekrety w GitHub Actions (Claude API key, connection string Neon, klucze VAPID)
+- [x] `.github/workflows/ingest.yml` (cron co 3h) — przebieg #3 zakończony sukcesem w 4m12s
+- [x] Sekrety w GitHub Actions (Claude API key, connection string Neon, klucze VAPID)
 
 ## Faza 7 — UI
 - [x] Lista dostarczonych newsów w appce — `components/news-list.tsx`, trafność + kategorie + źródło
@@ -51,3 +51,10 @@ Agent aktualizuje ten plik na bieżąco, ale nigdy go nie commituje bez zgody
 ## Faza 8 — Dopracowanie
 - [ ] Obsługa źródeł bez RSS (np. Anthropic News) przez scraping + Claude
 - [ ] Monitoring błędów pipeline'u
+
+## Faza 9 — Digest i skrzynka odbiorcza (ADR-0002)
+- [x] Cron co 2 dni zamiast co 3h
+- [x] Jedno powiadomienie zbiorcze na przebieg zamiast jednego na wpis
+- [x] `items.read_at` + skrzynka odbiorcza z sekcją „Nowe" i archiwum
+- [x] Badge z liczbą nieprzeczytanych na ikonie PWA
+- [ ] Włączyć workflow z powrotem w GitHub Actions (wyłączony ręcznie)

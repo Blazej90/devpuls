@@ -6,7 +6,7 @@ import {
   markNotified,
   syncSources,
 } from "@/db.js";
-import { sendPush } from "@/push.js";
+import { sendDigest } from "@/push.js";
 import { fetchSource } from "@/sources/index.js";
 import type { AssessedItem, NormalizedItem, SourceConfig } from "@/types.js";
 
@@ -64,8 +64,8 @@ async function main(): Promise<void> {
     `Kandydatów: ${candidates.length}, nowych po deduplikacji: ${fresh.length}`,
   );
 
-  const notifiedIds: number[] = [];
-  let assessedCount = 0;
+
+  const oceniona: { id: number; item: AssessedItem }[] = [];
 
   // Sekwencyjnie — kilkanaście wpisów na przebieg nie potrzebuje
   // zrównoleglenia, a tak nie wpadamy w rate limity API.
@@ -73,28 +73,27 @@ async function main(): Promise<void> {
     const assessment = await assessItem(item);
     if (!assessment) continue;
 
-    assessedCount += 1;
     const assessed: AssessedItem = { ...item, assessment };
-
     const itemId = await insertItem(assessed);
     if (itemId === null) continue;
 
-    // Bez progu w tym miejscu: od migracji 002 próg i kategorie są zapisane
-    // przy subskrypcji, więc decyzję podejmuje `sendPush` osobno dla każdej.
-    const delivered = await sendPush(assessed);
-    if (delivered > 0) {
-      notifiedIds.push(itemId);
-      console.log(
-        `[push] "${item.title}" (trafność ${assessment.relevance}) → ${delivered} subskrypcji`,
-      );
-    }
+    oceniona.push({ id: itemId, item: assessed });
   }
 
-  await markNotified(notifiedIds);
+  // Jedno powiadomienie zbiorcze na cały przebieg, nie jedno na wpis (ADR-0002).
+  // Filtrowanie po progu i kategoriach robi `sendDigest` osobno dla każdej
+  // subskrypcji, więc tutaj podajemy komplet.
+  const delivered = await sendDigest(oceniona.map((wpis) => wpis.item));
+
+  // `notified_at` oznaczamy dopiero, gdy digest faktycznie poszedł — inaczej
+  // wpisy wyglądałyby na zapowiedziane, mimo że nikt się o nich nie dowiedział.
+  if (delivered > 0) {
+    await markNotified(oceniona.map((wpis) => wpis.id));
+  }
 
   console.log(
     `Gotowe w ${Math.round((Date.now() - startedAt) / 1000)}s — ` +
-      `ocenionych ${assessedCount}, powiadomień ${notifiedIds.length}`,
+      `ocenionych ${oceniona.length}, digestów wysłanych ${delivered}`,
   );
 }
 

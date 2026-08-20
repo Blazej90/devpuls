@@ -25,11 +25,34 @@ interface PushPayload {
   url: string;
 }
 
-function toPayload(item: AssessedItem): PushPayload {
+/** Adres appki — klik w powiadomienie otwiera skrzynkę, nie pojedynczy artykuł. */
+const APP_URL = process.env.APP_URL ?? "https://devpuls-ecru.vercel.app/";
+
+function odmianaWpisow(liczba: number): string {
+  if (liczba === 1) return "1 nowy wpis";
+  const reszta = liczba % 10;
+  const dziesiatki = liczba % 100;
+  const mnoga = reszta >= 2 && reszta <= 4 && (dziesiatki < 12 || dziesiatki > 14);
+  return `${liczba} ${mnoga ? "nowe wpisy" : "nowych wpisów"}`;
+}
+
+/**
+ * Treść digestu: liczba wpisów plus kilka najtrafniejszych tytułów, żeby dało
+ * się ocenić, czy warto wchodzić, bez otwierania appki (ADR-0002).
+ */
+function toDigestPayload(items: AssessedItem[]): PushPayload {
+  const najlepsze = [...items]
+    .sort((a, b) => b.assessment.relevance - a.assessment.relevance)
+    .slice(0, 3)
+    .map((item) => item.title);
+
+  const reszta = items.length - najlepsze.length;
+  const ogon = reszta > 0 ? `\n…i ${reszta} więcej` : "";
+
   return {
-    title: item.title,
-    body: item.assessment.summaryPl,
-    url: item.url,
+    title: `DevPuls — ${odmianaWpisow(items.length)}`,
+    body: najlepsze.join("\n") + ogon,
+    url: APP_URL,
   };
 }
 
@@ -49,27 +72,40 @@ function pasuje(item: AssessedItem, subscription: PushSubscriptionRow): boolean 
 
   return item.assessment.topics.some((topic) => wybrane.includes(topic));
 }
-
 /**
- * Wysyła powiadomienie o wpisie do tych subskrypcji, których ustawienia go
- * przepuszczają. Zwraca liczbę subskrypcji, do których udało się dostarczyć.
+ * Wysyła **jedno zbiorcze** powiadomienie na przebieg (ADR-0002). Wcześniej
+ * `pipeline.ts` wołał wysyłkę osobno dla każdego wpisu i 44 powiadomienia
+ * przychodziły jedno po drugim w odstępach kilku sekund.
+ *
+ * Każda subskrypcja dostaje digest złożony z wpisów, które przepuszczają
+ * **jej** ustawienia — dwa urządzenia mogą zobaczyć różne liczby.
+ *
+ * Zwraca liczbę subskrypcji, do których udało się dostarczyć.
  */
-export async function sendPush(item: AssessedItem): Promise<number> {
+export async function sendDigest(items: AssessedItem[]): Promise<number> {
+  if (items.length === 0) return 0;
+
   // Najpierw subskrypcje, dopiero potem klucze VAPID: bez ani jednej subskrypcji
   // nie ma czego wysyłać, więc brak kluczy nie może wywracać całego przebiegu.
-  const wszystkie = await listSubscriptions();
-  const subscriptions = wszystkie.filter((subscription) => pasuje(item, subscription));
+  const subscriptions = await listSubscriptions();
   if (subscriptions.length === 0) return 0;
+
+  const doWyslania = subscriptions
+    .map((subscription) => ({
+      subscription,
+      pasujace: items.filter((item) => pasuje(item, subscription)),
+    }))
+    .filter((wpis) => wpis.pasujace.length > 0);
+
+  if (doWyslania.length === 0) return 0;
 
   configure();
 
-  const payload = JSON.stringify(toPayload(item));
-
   const results = await Promise.allSettled(
-    subscriptions.map((subscription) =>
+    doWyslania.map(({ subscription, pasujace }) =>
       webpush.sendNotification(
         { endpoint: subscription.endpoint, keys: subscription.keysJson },
-        payload,
+        JSON.stringify(toDigestPayload(pasujace)),
       ),
     ),
   );
@@ -77,11 +113,14 @@ export async function sendPush(item: AssessedItem): Promise<number> {
   let delivered = 0;
 
   for (const [index, result] of results.entries()) {
-    const subscription = subscriptions[index];
-    if (!subscription) continue;
+    const wpis = doWyslania[index];
+    if (!wpis) continue;
 
     if (result.status === "fulfilled") {
       delivered += 1;
+      console.log(
+        `[push] digest z ${wpis.pasujace.length} wpisami → ${new URL(wpis.subscription.endpoint).hostname}`,
+      );
       continue;
     }
 
@@ -90,7 +129,7 @@ export async function sendPush(item: AssessedItem): Promise<number> {
     // 404/410 = subskrypcja wygasła. Na iOS zdarza się to po dłuższej
     // nieaktywności PWA (patrz ADR-0001, sekcja Konsekwencje).
     if (status === 404 || status === 410) {
-      await deleteSubscription(subscription.endpoint);
+      await deleteSubscription(wpis.subscription.endpoint);
       console.warn(`[push] usunięto wygasłą subskrypcję (${status})`);
     } else {
       console.error(`[push] błąd wysyłki (${status ?? "brak kodu"})`, result.reason);
