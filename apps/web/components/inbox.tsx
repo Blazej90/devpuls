@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Check, CheckCheck, ExternalLink, Trash2, X } from "lucide-react";
+import { Check, CheckCheck, ExternalLink, Star, Trash2, Undo2, X } from "lucide-react";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
@@ -13,12 +13,11 @@ import { cn } from "@/lib/utils";
 import { formatujDate, pogrupuj } from "@/lib/grupowanie";
 import { ETYKIETY_TEMATOW, type NewsItem, type Temat, type Widok } from "@/lib/items";
 
-/** Obie trasy zapisu zwracają aktualny licznik nieprzeczytanych. */
-async function wyslij(
-  sciezka: "/api/items/read" | "/api/items/delete",
-  body: unknown,
-): Promise<number> {
-  const response = await fetch(sciezka, {
+type Trasa = "/api/items/read" | "/api/items/delete" | "/api/items/star";
+
+/** Wszystkie trasy zapisu zwracają aktualny licznik nieprzeczytanych. */
+async function wyslij(trasa: Trasa, body: unknown): Promise<number> {
+  const response = await fetch(trasa, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(body),
@@ -43,16 +42,20 @@ function ustawBadge(liczba: number): void {
 function ItemCard({
   item,
   przeczytany,
+  ulubiony,
   zaznaczony,
   onZaznacz,
-  onPrzeczytaj,
+  onPrzelaczPrzeczytany,
+  onPrzelaczUlubiony,
   onUsun,
 }: {
   item: NewsItem;
   przeczytany: boolean;
+  ulubiony: boolean;
   zaznaczony: boolean;
   onZaznacz: (id: number, zaznaczony: boolean) => void;
-  onPrzeczytaj: (id: number) => void;
+  onPrzelaczPrzeczytany: (id: number, przeczytany: boolean) => void;
+  onPrzelaczUlubiony: (id: number, ulubiony: boolean) => void;
   onUsun: (id: number) => void;
 }) {
   const data = formatujDate(item.publishedAt);
@@ -84,9 +87,9 @@ function ItemCard({
 
             <CardTitle className="text-base leading-snug">
               {/*
-                Otwarcie linku NIE oznacza już wpisu jako przeczytanego
-                (ADR-0003). Wcześniej robiło to za użytkownika, więc otwarcie
-                artykułu w nowej karcie "na później" wyrzucało go ze skrzynki.
+                Otwarcie linku NIE oznacza wpisu jako przeczytanego (ADR-0003).
+                Wcześniej robiło to za użytkownika, więc otwarcie artykułu
+                w nowej karcie "na później" wyrzucało go ze skrzynki.
               */}
               <a
                 href={item.url}
@@ -99,6 +102,23 @@ function ItemCard({
               </a>
             </CardTitle>
           </div>
+
+          <Button
+            variant="ghost"
+            size="icon"
+            aria-pressed={ulubiony}
+            aria-label={ulubiony ? "Usuń z ulubionych" : "Dodaj do ulubionych"}
+            title={ulubiony ? "Usuń z ulubionych" : "Dodaj do ulubionych"}
+            onClick={() => onPrzelaczUlubiony(item.id, !ulubiony)}
+            className={cn(
+              "-mt-1 shrink-0",
+              ulubiony
+                ? "text-brand hover:text-brand"
+                : "text-muted-foreground hover:text-foreground",
+            )}
+          >
+            <Star className={cn("size-4", ulubiony && "fill-current")} aria-hidden />
+          </Button>
         </div>
       </CardHeader>
 
@@ -114,19 +134,30 @@ function ItemCard({
           </p>
 
           <div className="flex items-center gap-2">
-            {przeczytany ? (
-              <span className="text-muted-foreground flex items-center gap-1.5 text-xs">
-                <Check className="size-3.5" aria-hidden />
-                Przeczytane
-              </span>
-            ) : (
-              /* `outline`, nie `ghost`: dotąd przycisk ginął w stopce i jedyną
-                 widoczną akcją było "Oznacz wszystkie". */
-              <Button variant="outline" size="sm" onClick={() => onPrzeczytaj(item.id)}>
+            {/*
+              Jeden przełącznik zamiast jednokierunkowej akcji: do Etapu 5
+              odhaczenie dało się cofnąć wyłącznie przez bazę, więc pomyłkowe
+              kliknięcie było nieodwracalne z poziomu appki.
+            */}
+            <Button
+              variant={przeczytany ? "ghost" : "outline"}
+              size="sm"
+              aria-pressed={przeczytany}
+              title={
+                przeczytany
+                  ? "Oznacz z powrotem jako nieprzeczytane"
+                  : "Oznacz jako przeczytane"
+              }
+              onClick={() => onPrzelaczPrzeczytany(item.id, !przeczytany)}
+              className={przeczytany ? "text-muted-foreground" : undefined}
+            >
+              {przeczytany ? (
+                <Undo2 className="size-4" aria-hidden />
+              ) : (
                 <Check className="size-4" aria-hidden />
-                Przeczytane
-              </Button>
-            )}
+              )}
+              {przeczytany ? "Nieprzeczytane" : "Przeczytane"}
+            </Button>
 
             <Button
               variant="ghost"
@@ -146,6 +177,7 @@ function ItemCard({
 
 const PUSTE: Record<Widok, string> = {
   nowe: "Skrzynka pusta. Agent sprawdza źródła co dwa dni — nowe wpisy pojawią się tutaj.",
+  ulubione: "Nic jeszcze nie ma gwiazdki. Oznacz wpis gwiazdką, żeby wrócić do niego później.",
   przeczytane: "Nic jeszcze nie zostało odhaczone.",
   wszystkie: "Brak wpisów. Po pierwszym przebiegu agenta pojawią się tutaj.",
 };
@@ -162,7 +194,10 @@ export function Inbox({
 }) {
   const router = useRouter();
   const [usuniete, setUsuniete] = useState<Set<number>>(new Set());
-  const [przeczytane, setPrzeczytane] = useState<Set<number>>(new Set());
+  // Nadpisania optymistyczne: `Map` zamiast `Set`, bo oba stany są teraz
+  // dwukierunkowe — sama obecność id nie mówi już, w którą stronę poszła zmiana.
+  const [stanCzytania, setStanCzytania] = useState<Map<number, boolean>>(new Map());
+  const [stanGwiazdki, setStanGwiazdki] = useState<Map<number, boolean>>(new Map());
   const [zaznaczone, setZaznaczone] = useState<Set<number>>(new Set());
   const [blad, setBlad] = useState<string | null>(null);
   const [, startTransition] = useTransition();
@@ -170,18 +205,27 @@ export function Inbox({
   const odswiez = () => startTransition(() => router.refresh());
 
   const czyPrzeczytany = (item: NewsItem) =>
-    item.readAt !== null || przeczytane.has(item.id);
+    stanCzytania.get(item.id) ?? item.readAt !== null;
+  const czyUlubiony = (item: NewsItem) =>
+    stanGwiazdki.get(item.id) ?? item.starredAt !== null;
 
   const widoczne = useMemo(
     () =>
       wpisy.filter((item) => {
         if (usuniete.has(item.id)) return false;
-        // W zakładce "Nowe" odhaczony wpis znika od razu; w pozostałych zostaje
-        // i tylko zmienia wygląd — inaczej karta uciekałaby spod kursora.
-        if (widok === "nowe" && przeczytane.has(item.id)) return false;
+
+        const przeczytany = stanCzytania.get(item.id) ?? item.readAt !== null;
+        const ulubiony = stanGwiazdki.get(item.id) ?? item.starredAt !== null;
+
+        // Wpis znika tylko z tej zakładki, do której przestał należeć.
+        // W "Wszystkich" zostaje i zmienia wygląd — inaczej karta uciekałaby
+        // spod kursora w widoku, który z założenia pokazuje komplet.
+        if (widok === "nowe" && przeczytany) return false;
+        if (widok === "przeczytane" && !przeczytany) return false;
+        if (widok === "ulubione" && !ulubiony) return false;
         return true;
       }),
-    [wpisy, usuniete, przeczytane, widok],
+    [wpisy, usuniete, stanCzytania, stanGwiazdki, widok],
   );
 
   const grupy = useMemo(() => pogrupuj(widoczne, dzisiaj), [widoczne, dzisiaj]);
@@ -198,25 +242,59 @@ export function Inbox({
 
   const odznaczWszystko = () => setZaznaczone(new Set());
 
-  function oznaczJako(ids: number[]) {
+  /** Wspólna obsługa nadpisań optymistycznych z wycofaniem przy błędzie. */
+  function zapisz(
+    ustaw: React.Dispatch<React.SetStateAction<Map<number, boolean>>>,
+    ids: number[],
+    wartosc: boolean,
+    trasa: Trasa,
+    body: unknown,
+    komunikat: string,
+  ) {
     if (ids.length === 0) return;
-    const poprzednie = przeczytane;
 
-    setPrzeczytane((biezace) => new Set([...biezace, ...ids]));
+    let poprzednie: Map<number, boolean> = new Map();
+    ustaw((biezace) => {
+      poprzednie = biezace;
+      const nowe = new Map(biezace);
+      for (const id of ids) nowe.set(id, wartosc);
+      return nowe;
+    });
+
     setBlad(null);
     odznaczWszystko();
 
-    void wyslij("/api/items/read", { ids })
+    void wyslij(trasa, body)
       .then((liczba) => {
         ustawBadge(liczba);
         odswiez();
       })
       .catch((error: unknown) => {
-        console.error("[skrzynka] oznaczenie nieudane", error);
+        console.error(`[skrzynka] ${komunikat}`, error);
         setBlad("Nie udało się zapisać. Wpisy wróciły na miejsce.");
-        setPrzeczytane(poprzednie);
+        ustaw(poprzednie);
       });
   }
+
+  const ustawPrzeczytane = (ids: number[], przeczytane: boolean) =>
+    zapisz(
+      setStanCzytania,
+      ids,
+      przeczytane,
+      "/api/items/read",
+      przeczytane ? { ids } : { ids, odznacz: true },
+      "zmiana stanu przeczytania nieudana",
+    );
+
+  const ustawUlubione = (ids: number[], gwiazdka: boolean) =>
+    zapisz(
+      setStanGwiazdki,
+      ids,
+      gwiazdka,
+      "/api/items/star",
+      { ids, gwiazdka },
+      "zmiana ulubionych nieudana",
+    );
 
   function cofnijUsuniecie(ids: number[]) {
     void wyslij("/api/items/delete", { ids, przywroc: true })
@@ -261,6 +339,10 @@ export function Inbox({
       });
   }
 
+  const doOdhaczenia = zaznaczoneWidoczne.filter((item) => !czyPrzeczytany(item));
+  const doOdznaczenia = zaznaczoneWidoczne.filter((item) => czyPrzeczytany(item));
+  const doGwiazdki = zaznaczoneWidoczne.filter((item) => !czyUlubiony(item));
+
   return (
     <div className="space-y-8">
       {blad && (
@@ -292,7 +374,12 @@ export function Inbox({
                     variant="ghost"
                     size="sm"
                     className="text-muted-foreground hover:text-foreground text-xs"
-                    onClick={() => oznaczJako(nieodhaczone.map((item) => item.id))}
+                    onClick={() =>
+                      ustawPrzeczytane(
+                        nieodhaczone.map((item) => item.id),
+                        true,
+                      )
+                    }
                   >
                     <CheckCheck className="size-3.5" aria-hidden />
                     Oznacz grupę
@@ -306,9 +393,11 @@ export function Inbox({
                     <ItemCard
                       item={item}
                       przeczytany={czyPrzeczytany(item)}
+                      ulubiony={czyUlubiony(item)}
                       zaznaczony={zaznaczone.has(item.id)}
                       onZaznacz={przelaczZaznaczenie}
-                      onPrzeczytaj={(id) => oznaczJako([id])}
+                      onPrzelaczPrzeczytany={(id, stan) => ustawPrzeczytane([id], stan)}
+                      onPrzelaczUlubiony={(id, stan) => ustawUlubione([id], stan)}
                       onUsun={(id) => usun([id])}
                     />
                   </li>
@@ -321,31 +410,70 @@ export function Inbox({
 
       {/* Pasek akcji zbiorczych — pojawia się dopiero, gdy coś jest zaznaczone.
           `fixed`, nie `sticky`: na telefonie ma być w zasięgu kciuka niezależnie
-          od tego, jak daleko użytkownik przewinął. */}
+          od tego, jak daleko użytkownik przewinął. Przycisk „na górę" siedzi
+          wyżej (`bottom-24`), więc nigdy się z tym paskiem nie nakłada. */}
       {zaznaczoneWidoczne.length > 0 && (
         <div
           role="region"
           aria-label="Akcje dla zaznaczonych"
-          className="fixed inset-x-0 bottom-4 z-50 flex justify-center px-4"
+          className="fixed inset-x-0 bottom-6 z-50 flex justify-center px-4"
         >
-          <div className="bg-popover text-popover-foreground border-border flex items-center gap-2 rounded-lg border p-2 shadow-lg">
+          <div className="bg-popover text-popover-foreground border-border flex flex-wrap items-center justify-center gap-2 rounded-lg border p-2 shadow-lg">
             <span className="px-2 text-sm tabular-nums">
               Zaznaczone: {zaznaczoneWidoczne.length}
             </span>
+
+            {/* Kierunek akcji zależy od tego, co jest w zaznaczeniu — przy
+                mieszanym pokazujemy oba przyciski, każdy działa na swoją część. */}
+            {doOdhaczenia.length > 0 && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() =>
+                  ustawPrzeczytane(
+                    doOdhaczenia.map((item) => item.id),
+                    true,
+                  )
+                }
+              >
+                <Check className="size-4" aria-hidden />
+                Przeczytane
+              </Button>
+            )}
+
+            {doOdznaczenia.length > 0 && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() =>
+                  ustawPrzeczytane(
+                    doOdznaczenia.map((item) => item.id),
+                    false,
+                  )
+                }
+              >
+                <Undo2 className="size-4" aria-hidden />
+                Nieprzeczytane
+              </Button>
+            )}
 
             <Button
               variant="outline"
               size="sm"
               onClick={() =>
-                oznaczJako(
-                  zaznaczoneWidoczne
-                    .filter((item) => !czyPrzeczytany(item))
-                    .map((item) => item.id),
+                ustawUlubione(
+                  (doGwiazdki.length > 0 ? doGwiazdki : zaznaczoneWidoczne).map(
+                    (item) => item.id,
+                  ),
+                  doGwiazdki.length > 0,
                 )
               }
             >
-              <Check className="size-4" aria-hidden />
-              Przeczytane
+              <Star
+                className={cn("size-4", doGwiazdki.length === 0 && "fill-current")}
+                aria-hidden
+              />
+              {doGwiazdki.length > 0 ? "Do ulubionych" : "Bez gwiazdki"}
             </Button>
 
             <Button

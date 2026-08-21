@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="512" height="512" role="img" aria-label="DevPuls">
+  <!--
+    Wariant znaku z tłem — źródło prawdy dla ikon PWA.
+    Kolory wpisane na sztywno, bo ten plik trafia do systemu operacyjnego,
+    który nie zna tokenów motywu. Wersja adaptująca się do motywu siedzi
+    w `components/logo.tsx`.
+  -->
+  <rect width="48" height="48" rx="10" fill="#0A0A0A"/>
+  <path d="M3 24H13L18 13L24 35L30 9L35 24H45"
+        fill="none" stroke="#22D3EE" stroke-width="4"
+        stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

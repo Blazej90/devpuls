@@ -23,6 +23,8 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
+  --color-brand: var(--brand);
+  --color-brand-foreground: var(--brand-foreground);
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
@@ -31,6 +33,11 @@
 
 :root {
   --radius: 0.625rem;
+  /* Barwa marki — cyjan ze znaku pulsu (ADR-0003, Etap 4).
+     Dwa odcienie, bo jeden nie przechodzi kontrastu w obu motywach:
+     na bieli potrzebny jest ciemniejszy (ok. 4,9:1), na czerni jaśniejszy. */
+  --brand: oklch(0.52 0.105 223);
+  --brand-foreground: oklch(0.985 0 0);
   --background: oklch(1 0 0);
   --foreground: oklch(0.145 0 0);
   --card: oklch(1 0 0);
@@ -53,6 +60,8 @@
 }
 
 .dark {
+  --brand: oklch(0.789 0.154 211);
+  --brand-foreground: oklch(0.205 0 0);
   --background: oklch(0.145 0 0);
   --foreground: oklch(0.985 0 0);
   --card: oklch(0.205 0 0);

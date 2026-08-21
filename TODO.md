@@ -82,8 +82,7 @@ Agent aktualizuje ten plik na bieżąco, ale nigdy go nie commituje bez zgody
       daje w trybie jasnym kontrast 1,08:1 (nie widać, co jest wybrane)
 - [x] `manifest.json`: `theme_color`/`background_color` z `#0a0a0a` na `#ffffff` —
       splash był czarny, a appka renderowała się na biało
-- [ ] Do rewizji w Etapie 4: kolor splash-a jako barwa marki, wtedy przestanie
-      zależeć od tego, który motyw akurat wybrał użytkownik
+- [x] Kolor splash-a przeniesiony na barwę marki w Etapie 4 — patrz niżej
 
 ### Etap 3 — skrzynka
 - [x] Zakładki Nowe / Przeczytane / Wszystkie z licznikami, stan w URL (`?widok=`).
@@ -100,10 +99,33 @@ Agent aktualizuje ten plik na bieżąco, ale nigdy go nie commituje bez zgody
 - [x] Usuwanie pojedyncze i zbiorcze + toast „Cofnij” (shadcn `sonner`)
 
 ### Etap 4 — treść i tożsamość
-- [ ] Hero — nowa treść, bardziej produkcyjna
-- [ ] Sekcja „O aplikacji” + autor (GitHub, portfolio, LinkedIn)
-- [ ] Logo DevPuls jako SVG
-- [ ] Ikony PWA wygenerowane z SVG (PNG zostaje dla `apple-touch-icon` i maskable)
+- [x] Hero — claim + pasek faktów; liczba źródeł czytana z bazy, nie wpisana w tekst
+- [x] Logo: znak pulsu w wektorze (`components/logo.tsx`) + wordmark jako tekst
+- [x] Barwa marki jako tokeny `--brand` (dwa odcienie, bo jeden nie przechodzi
+      kontrastu w obu motywach) — domyka otwarty punkt z Etapu 2
+- [x] Ikony PWA wygenerowane z wektora: 192/512 „any”, 512 maskable (znak w strefie
+      bezpiecznej), 180 `apple-touch-icon` bez własnego zaokrąglenia
+- [x] Favicon `app/icon.svg`; `metadata.icons` deklaruje oba jawnie, bo samo
+      zadeklarowanie `icons` wyłącza konwencję plikową Next.js
+- [x] Splash PWA na `#0A0A0A` — zgodny z tłem ikony, więc znak wtapia się w splash
+      zamiast zależeć od wybranego motywu
+- [x] Sekcja „O aplikacji” z notą © i linkami: GitHub, portfolio, LinkedIn.
+      Adres LinkedIna zapisany procentowo (polskie znaki w ścieżce), rok liczony
+      przy renderze, więc nota nie zestarzeje się 1 stycznia
+
+### Etap 5 — dopracowanie skrzynki
+- [x] „O aplikacji” jako podstrona `/o-aplikacji` + link w nagłówku. Jako karta na
+      dole listy wyglądała identycznie jak wpis i im więcej appka miała treści,
+      tym trudniej było do niej dotrzeć
+- [x] Przycisk „na górę” przy długim przewijaniu — `components/do-gory.tsx`,
+      `useSyncExternalStore` na pozycji przewinięcia, respektuje `prefers-reduced-motion`
+- [x] Odznaczanie z powrotem jako nieprzeczytane — do tej pory stan był
+      jednokierunkowy i pomyłkę dało się cofnąć tylko przez bazę
+- [x] Ulubione: migracja 006 (`items.starred_at`), gwiazdka na karcie, zakładka
+      „Ulubione”, `POST /api/items/star`
+- [x] Poprawka nawigacji: wskaźnik aktywnej zakładki w barwie marki (wcześniej
+      `primary` siadał na kresce rozdzielającej i czytało się to jak jedna linia),
+      liczniki jako pigułki, odstęp do chipów, przewijanie w poziomie na telefonie
 
 ### Odrzucone
 - [x] ~~Pasek z automatycznie przewijanymi newsami~~ — powielałby pierwsze karty

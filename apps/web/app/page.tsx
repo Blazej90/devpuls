@@ -1,14 +1,20 @@
-import { BackgroundBeams } from "@/components/ui/background-beams";
-import { Badge } from "@/components/ui/badge";
+import { Hero } from "@/components/hero";
 import { InstallHint } from "@/components/pwa/install-hint";
 import { PushSettings } from "@/components/pwa/push-settings";
 import { PushToggle } from "@/components/pwa/push-toggle";
+import { DoGory } from "@/components/do-gory";
 import { Inbox } from "@/components/inbox";
 import { RunStatus } from "@/components/run-status";
-import { ThemeToggle } from "@/components/theme-toggle";
-import { TematyFiltr, WidokTabs } from "@/components/skrzynka-filtry";
+import { SkrzynkaNawigacja } from "@/components/skrzynka-filtry";
 import { dzienKalendarzowy } from "@/lib/grupowanie";
-import { countUnread, liczniki, listItems, parseTemat, parseWidok } from "@/lib/items";
+import {
+  countSources,
+  countUnread,
+  liczniki,
+  listItems,
+  parseTemat,
+  parseWidok,
+} from "@/lib/items";
 import { getLastRunSafe } from "@/lib/runs";
 
 /** Skrzynka czyta bazę przy każdym wejściu — po powiadomieniu ma być aktualna. */
@@ -23,10 +29,11 @@ export default async function HomePage({
   const widok = parseWidok(params.widok);
   const temat = parseTemat(params.temat);
 
-  const [wpisy, liczby, nieprzeczytane, ostatniPrzebieg] = await Promise.all([
+  const [wpisy, liczby, nieprzeczytane, zrodel, ostatniPrzebieg] = await Promise.all([
     listItems({ widok, temat }),
     liczniki(temat),
     countUnread(),
+    countSources(),
     getLastRunSafe(),
   ]);
 
@@ -37,24 +44,7 @@ export default async function HomePage({
 
   return (
     <main className="mx-auto flex w-full max-w-2xl flex-col gap-8 px-6 py-12">
-      {/* Beams zostają, ale zamknięte w banerze — jako tło całej strony biłyby
-          się z przewijaną listą. */}
-      <header className="relative -mx-6 -mt-12 overflow-hidden px-6 pt-12 pb-8">
-        <BackgroundBeams className="pointer-events-none" />
-        <div className="relative z-10 space-y-4">
-          <div className="flex items-start justify-between gap-4">
-            <div className="flex items-center gap-3">
-              <h1 className="text-4xl font-semibold tracking-tight">DevPuls</h1>
-              {nieprzeczytane > 0 && <Badge>{nieprzeczytane} nowych</Badge>}
-            </div>
-            <ThemeToggle />
-          </div>
-          <p className="text-muted-foreground text-balance">
-            Nowinki techniczne przefiltrowane pod kątem trafności i streszczone po
-            polsku, z linkiem do oryginalnego źródła.
-          </p>
-        </div>
-      </header>
+      <Hero nieprzeczytane={nieprzeczytane} zrodel={zrodel} />
 
       <RunStatus run={ostatniPrzebieg} />
 
@@ -62,12 +52,11 @@ export default async function HomePage({
       <PushToggle />
       <PushSettings />
 
-      <div className="space-y-4">
-        <WidokTabs widok={widok} temat={temat} liczniki={liczby} />
-        <TematyFiltr widok={widok} temat={temat} />
-      </div>
+      <SkrzynkaNawigacja widok={widok} temat={temat} liczniki={liczby} />
 
       <Inbox wpisy={wpisy} widok={widok} dzisiaj={dzisiaj} />
+
+      <DoGory />
     </main>
   );
 }

@@ -12,7 +12,9 @@ import { sql } from "@/lib/db";
 /** Poniżej tej trafności wpis w ogóle nie trafia do skrzynki. */
 const MIN_RELEVANCE = 3;
 
-export const WIDOKI = ["nowe", "przeczytane", "wszystkie"] as const;
+// Kolejność zakładek. „Ulubione" tuż po „Nowych", bo to drugi kubełek
+// „to mnie obchodzi" — archiwum i komplet są rzadziej potrzebne.
+export const WIDOKI = ["nowe", "ulubione", "przeczytane", "wszystkie"] as const;
 export type Widok = (typeof WIDOKI)[number];
 
 /** Kategorie zwracane przez `packages/agent/src/claude.ts`. */
@@ -38,6 +40,7 @@ export const ETYKIETY_TEMATOW: Record<Temat, string> = {
 
 export const ETYKIETY_WIDOKOW: Record<Widok, string> = {
   nowe: "Nowe",
+  ulubione: "Ulubione",
   przeczytane: "Przeczytane",
   wszystkie: "Wszystkie",
 };
@@ -67,6 +70,8 @@ export interface NewsItem {
   publishedAt: string | null;
   sourceName: string;
   readAt: string | null;
+  /** Znacznik dodania do ulubionych; `null` = bez gwiazdki (migracja 006). */
+  starredAt: string | null;
   /**
    * Data, po której wpis jest sortowany i po której grupuje go skrzynka:
    * publikacja, a w jej braku moment zapisu. Wyliczana w bazie, żeby widok
@@ -91,6 +96,7 @@ interface ItemRow {
   published_at: Date | string | null;
   source_name: string;
   read_at: Date | string | null;
+  starred_at: Date | string | null;
   recency: Date | string;
 }
 
@@ -113,6 +119,7 @@ function toItem(row: ItemRow): NewsItem {
     publishedAt: toIsoOrNull(row.published_at),
     sourceName: row.source_name,
     readAt: toIsoOrNull(row.read_at),
+    starredAt: toIsoOrNull(row.starred_at),
     recency: toIso(row.recency),
   };
 }
@@ -138,6 +145,9 @@ function budujWarunki(filtr: Filtr): { where: string; params: unknown[] } {
 
   if (filtr.widok === "nowe") czesci.push("i.read_at IS NULL");
   if (filtr.widok === "przeczytane") czesci.push("i.read_at IS NOT NULL");
+  // Ulubione są prostopadłe do stanu przeczytania — zakładka pokazuje je
+  // niezależnie od tego, czy wpis został odhaczony.
+  if (filtr.widok === "ulubione") czesci.push("i.starred_at IS NOT NULL");
 
   if (filtr.temat) {
     params.push([filtr.temat]);
@@ -155,7 +165,7 @@ export async function listItems(filtr: Filtr, limit = 100): Promise<NewsItem[]> 
   const rows = (await sql().query(
     `SELECT
        i.id, i.url, i.title_original, i.summary_pl, i.relevance_score,
-       i.topics, i.published_at, i.read_at, s.name AS source_name,
+       i.topics, i.published_at, i.read_at, i.starred_at, s.name AS source_name,
        ${RECENCY} AS recency
      FROM items i
      JOIN sources s ON s.id = i.source_id
@@ -177,15 +187,16 @@ export async function liczniki(temat: Temat | null): Promise<Record<Widok, numbe
 
   const rows = (await sql().query(
     `SELECT
-       COUNT(*) FILTER (WHERE i.read_at IS NULL)::int     AS nowe,
-       COUNT(*) FILTER (WHERE i.read_at IS NOT NULL)::int AS przeczytane,
-       COUNT(*)::int                                      AS wszystkie
+       COUNT(*) FILTER (WHERE i.read_at IS NULL)::int        AS nowe,
+       COUNT(*) FILTER (WHERE i.starred_at IS NOT NULL)::int AS ulubione,
+       COUNT(*) FILTER (WHERE i.read_at IS NOT NULL)::int    AS przeczytane,
+       COUNT(*)::int                                         AS wszystkie
      FROM items i
      WHERE ${where}`,
     params,
   )) as Record<Widok, number>[];
 
-  return rows[0] ?? { nowe: 0, przeczytane: 0, wszystkie: 0 };
+  return rows[0] ?? { nowe: 0, ulubione: 0, przeczytane: 0, wszystkie: 0 };
 }
 
 /**
@@ -287,6 +298,47 @@ export async function softDelete(ids: number[]): Promise<void> {
   `;
 }
 
+/**
+ * Cofnięcie odhaczenia — wpis wraca do „Nowych".
+ *
+ * Bez tego stan przeczytania był jednokierunkowy: pomyłkowe kliknięcie dało się
+ * odwrócić tylko przez bazę. Warunek `read_at IS NOT NULL` czyni operację
+ * idempotentną.
+ */
+export async function markUnread(ids: number[]): Promise<void> {
+  if (ids.length === 0) return;
+
+  await sql()`
+    UPDATE items SET read_at = NULL
+    WHERE read_at IS NOT NULL
+      AND deleted_at IS NULL
+      AND id = ANY(${jakoTekst(ids)})
+  `;
+}
+
+/**
+ * Gwiazdka (migracja 006). Ulubione są **prostopadłe** do stanu przeczytania —
+ * ta operacja nie rusza `read_at`, a odhaczenie nie rusza gwiazdki.
+ */
+export async function setStarred(ids: number[], gwiazdka: boolean): Promise<void> {
+  if (ids.length === 0) return;
+
+  if (gwiazdka) {
+    await sql()`
+      UPDATE items SET starred_at = NOW()
+      WHERE starred_at IS NULL
+        AND deleted_at IS NULL
+        AND id = ANY(${jakoTekst(ids)})
+    `;
+    return;
+  }
+
+  await sql()`
+    UPDATE items SET starred_at = NULL
+    WHERE id = ANY(${jakoTekst(ids)})
+  `;
+}
+
 /** Cofnięcie usunięcia — obsługuje „Cofnij" w toaście po akcji. */
 export async function restore(ids: number[]): Promise<void> {
   if (ids.length === 0) return;
@@ -295,4 +347,16 @@ export async function restore(ids: number[]): Promise<void> {
     UPDATE items SET deleted_at = NULL
     WHERE id = ANY(${jakoTekst(ids)})
   `;
+}
+
+/**
+ * Liczba skonfigurowanych źródeł — do paska faktów w hero.
+ *
+ * Czytana z bazy, a nie wpisana w tekst: tabelę `sources` synchronizuje agent
+ * przy każdym przebiegu z `packages/agent/config/sources.json`, więc dopisanie
+ * źródła aktualizuje nagłówek samo. Literał w JSX rozjechałby się po cichu.
+ */
+export async function countSources(): Promise<number> {
+  const rows = (await sql()`SELECT COUNT(*)::int AS n FROM sources`) as { n: number }[];
+  return rows[0]?.n ?? 0;
 }

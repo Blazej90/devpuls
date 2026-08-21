@@ -51,11 +51,14 @@ devpuls/
 │       ├── app/
 │       │   ├── layout.tsx        # <html lang="pl">, metadata, viewport, bootstrap PWA
 │       │   ├── page.tsx
+│       │   ├── icon.svg          # favicon (konwencja Next)
+│       │   ├── o-aplikacji/page.tsx # opis appki + nota autora
 │       │   ├── globals.css       # @theme + tokeny kolorów (light/dark)
 │       │   └── api/
 │       │       ├── health/route.ts           # GET stan pipeline'u (200/503)
 │       │       ├── items/read/route.ts       # POST oznaczenie jako przeczytane
 │       │       ├── items/delete/route.ts     # POST miękkie usunięcie + cofnięcie
+│       │       ├── items/star/route.ts       # POST gwiazdka (ulubione)
 │       │       └── push/
 │       │           ├── subscribe/route.ts    # POST + DELETE subskrypcji
 │       │           └── settings/route.ts     # POST odczyt, PATCH zapis ustawień
@@ -65,6 +68,10 @@ devpuls/
 │       │   ├── pwa/              # sw, prompt instalacji, zgoda i ustawienia pushy
 │       │   ├── inbox.tsx         # skrzynka: grupy dat, zaznaczanie, usuwanie
 │       │   ├── skrzynka-filtry.tsx # zakładki i chipy kategorii (linki)
+│       │   ├── hero.tsx          # nagłówek: logo, claim, pasek faktów
+│       │   ├── logo.tsx          # znak pulsu (SVG, currentColor)
+│       │   ├── do-gory.tsx       # powrót na górę przy długich listach
+│       │   ├── theme-provider.tsx / theme-toggle.tsx
 │       │   ├── run-status.tsx    # pasek zdrowia ostatniego przebiegu
 │       │   ├── theme-provider.tsx # next-themes, klasa `.dark` na <html>
 │       │   └── theme-toggle.tsx  # segment system / jasny / ciemny
@@ -89,7 +96,8 @@ devpuls/
 │       │   ├── 002_topics_and_settings.sql
 │       │   ├── 003_read_state.sql
 │       │   ├── 004_run_log.sql  # tabela `runs` — dziennik zdrowia
-│       │   └── 005_soft_delete_and_recency.sql
+│       │   ├── 005_soft_delete_and_recency.sql
+│       │   └── 006_ulubione.sql
 │       ├── config/
 │       │   └── sources.json
 │       └── src/
@@ -314,6 +322,12 @@ per subskrypcja, bo to inna właściwość: filtr należy do urządzenia, przecz
 Migracja 004 dołożyła `runs(id, started_at, finished_at, duration_ms, status, sources_ok,
 sources_failed, candidates, fresh, assessed, delivered, errors)` — dziennik zdrowia agenta,
 jeden wiersz na przebieg, `errors` jako JSONB. Szczegóły w sekcji 9.
+
+Migracja 006 dołożyła `items.starred_at` — ulubione. Znacznik czasu, nie flaga
+BOOLEAN, dla spójności z `read_at` i `deleted_at`. Ulubione są **prostopadłe** do stanu
+przeczytania: wpis może być jednocześnie przeczytany i ulubiony, odhaczenie nie rusza
+gwiazdki i odwrotnie. Dlatego gwiazdka ma własną trasę (`/api/items/star`), a nie flagę
+przy `/api/items/read`.
 
 Migracja 005 dołożyła `items.deleted_at` (miękkie usuwanie, ADR-0003) i przestawiła
 kolejność skrzynki na `COALESCE(published_at, created_at)`. Usuwanie **musi** być

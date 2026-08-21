@@ -29,7 +29,12 @@ function adres(widok: Widok, temat: Temat | null): string {
   return query ? `/?${query}` : "/";
 }
 
-export function WidokTabs({
+/**
+ * Nawigacja skrzynki: zakładki (poziom widoku) nad chipami (poziom filtra).
+ * Dwa różne kształty — podkreślenie kontra pigułka — bo to dwa różne poziomy
+ * hierarchii; gdyby oba były pigułkami, nie dałoby się ich odróżnić.
+ */
+export function SkrzynkaNawigacja({
   widok,
   temat,
   liczniki,
@@ -39,67 +44,77 @@ export function WidokTabs({
   liczniki: Record<Widok, number>;
 }) {
   return (
-    <nav aria-label="Widok skrzynki" className="border-border -mb-px flex gap-1 border-b">
-      {WIDOKI.map((pozycja) => {
-        const aktywna = pozycja === widok;
-        return (
-          <Link
-            key={pozycja}
-            href={adres(pozycja, temat)}
-            aria-current={aktywna ? "page" : undefined}
-            className={cn(
-              "focus-visible:ring-ring -mb-px rounded-t-md border-b-2 px-3 py-2 text-sm",
-              "transition-colors focus-visible:ring-1 focus-visible:outline-none",
-              aktywna
-                ? "border-primary text-foreground font-medium"
-                : "text-muted-foreground hover:text-foreground border-transparent",
-            )}
-          >
-            {ETYKIETY_WIDOKOW[pozycja]}
-            <span className="text-muted-foreground ml-1.5 tabular-nums">
-              {liczniki[pozycja]}
-            </span>
-          </Link>
-        );
-      })}
-    </nav>
-  );
-}
+    <div className="space-y-4">
+      <nav aria-label="Widok skrzynki">
+        {/*
+          Kreska rozdzielająca jest hairline'em w kolorze `border`, a wskaźnik
+          aktywnej zakładki — grubszą kreską w barwie marki. Wcześniej wskaźnik
+          miał kolor `primary` (prawie czarny / prawie biały) i siadał dokładnie
+          na linii, więc czytało się to jak jedna ciągła kreska zamiast jak
+          zaznaczenie.
 
-/**
- * Chipy kategorii. Do Etapu 3 stały w nagłówku jako zwykłe `Badge` bez obsługi
- * kliknięcia — wyglądały dokładnie jak filtr, którego appce brakowało.
- */
-export function TematyFiltr({
-  widok,
-  temat,
-}: {
-  widok: Widok;
-  temat: Temat | null;
-}) {
-  const pozycje: (Temat | null)[] = [null, ...TEMATY];
+          Przewijanie w poziomie, bo cztery zakładki z licznikami nie mieszczą
+          się w szerokości telefonu.
+        */}
+        <ul className="border-border flex gap-1 overflow-x-auto border-b [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          {WIDOKI.map((pozycja) => {
+            const aktywna = pozycja === widok;
+            return (
+              <li key={pozycja} className="shrink-0">
+                <Link
+                  href={adres(pozycja, temat)}
+                  aria-current={aktywna ? "page" : undefined}
+                  className={cn(
+                    "focus-visible:ring-ring -mb-px flex items-center gap-2 border-b-2 px-3 py-2.5",
+                    "text-sm transition-colors focus-visible:ring-1 focus-visible:outline-none",
+                    aktywna
+                      ? "border-brand text-foreground font-medium"
+                      : "text-muted-foreground hover:text-foreground border-transparent",
+                  )}
+                >
+                  {ETYKIETY_WIDOKOW[pozycja]}
+                  <span
+                    className={cn(
+                      "rounded-full px-1.5 py-0.5 text-[11px] leading-none tabular-nums",
+                      aktywna
+                        ? "bg-brand/15 text-brand"
+                        : "bg-muted text-muted-foreground",
+                    )}
+                  >
+                    {liczniki[pozycja]}
+                  </span>
+                </Link>
+              </li>
+            );
+          })}
+        </ul>
+      </nav>
 
-  return (
-    <nav aria-label="Filtr kategorii" className="flex flex-wrap gap-2">
-      {pozycje.map((pozycja) => {
-        const aktywna = pozycja === temat;
-        return (
-          <Link
-            key={pozycja ?? "wszystkie"}
-            href={adres(widok, pozycja)}
-            aria-current={aktywna ? "true" : undefined}
-            className={cn(
-              "focus-visible:ring-ring rounded-md border px-2.5 py-0.5 text-xs font-semibold",
-              "transition-colors focus-visible:ring-1 focus-visible:outline-none",
-              aktywna
-                ? "bg-primary text-primary-foreground border-primary"
-                : "border-border text-muted-foreground hover:text-foreground hover:border-foreground/30",
-            )}
-          >
-            {pozycja === null ? "Wszystkie" : ETYKIETY_TEMATOW[pozycja]}
-          </Link>
-        );
-      })}
-    </nav>
+      {/*
+        Chipy kategorii. Do Etapu 3 stały w nagłówku jako zwykłe `Badge` bez
+        obsługi kliknięcia — wyglądały dokładnie jak filtr, którego appce brakowało.
+      */}
+      <nav aria-label="Filtr kategorii" className="flex flex-wrap gap-2">
+        {([null, ...TEMATY] as (Temat | null)[]).map((pozycja) => {
+          const aktywna = pozycja === temat;
+          return (
+            <Link
+              key={pozycja ?? "wszystkie"}
+              href={adres(widok, pozycja)}
+              aria-current={aktywna ? "true" : undefined}
+              className={cn(
+                "focus-visible:ring-ring rounded-full border px-3 py-1 text-xs font-medium",
+                "transition-colors focus-visible:ring-1 focus-visible:outline-none",
+                aktywna
+                  ? "bg-primary text-primary-foreground border-primary"
+                  : "border-border text-muted-foreground hover:text-foreground hover:border-foreground/30",
+              )}
+            >
+              {pozycja === null ? "Wszystkie" : ETYKIETY_TEMATOW[pozycja]}
+            </Link>
+          );
+        })}
+      </nav>
+    </div>
   );
 }

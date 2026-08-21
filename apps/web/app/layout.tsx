@@ -17,11 +17,15 @@ export const metadata: Metadata = {
     "Nowinki z TypeScript, Reacta, JS, fullstacku i AI — przefiltrowane pod kątem trafności i streszczone po polsku.",
   applicationName: "DevPuls",
   manifest: "/manifest.json",
+  // Oba wpisy jawnie: zadeklarowanie `icons` wyłącza konwencję plikową Next.js,
+  // więc samo `app/icon.svg` nie wystarczy — sprawdzone, link do faviconu
+  // wtedy w ogóle nie trafia do <head>.
+  //
+  // SVG dla przeglądarki (jeden plik, każdy rozmiar), PNG dla Safari:
+  // `apple-touch-icon` **nie przyjmuje SVG**, a iOS to platforma, na której
+  // appka jest faktycznie zainstalowana.
   icons: {
-    icon: [
-      { url: "/icon-192.png", sizes: "192x192", type: "image/png" },
-      { url: "/icon-512.png", sizes: "512x512", type: "image/png" },
-    ],
+    icon: [{ url: "/icon.svg", type: "image/svg+xml" }],
     apple: "/apple-touch-icon.png",
   },
   // Wymagane, żeby iOS traktował stronę dodaną do ekranu głównego jak appkę
