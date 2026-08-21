@@ -1,6 +1,7 @@
 import { neon } from "@neondatabase/serverless";
 
 import { requireEnv } from "@/config.js";
+import type { RunReport } from "@/monitor.js";
 import type { AssessedItem, SourceConfig } from "@/types.js";
 
 /**
@@ -102,4 +103,27 @@ export async function listSubscriptions(): Promise<PushSubscriptionRow[]> {
 /** Subskrypcja odrzucona przez push service (410/404) — nie ma po co jej trzymać. */
 export async function deleteSubscription(endpoint: string): Promise<void> {
   await db()`DELETE FROM push_subscriptions WHERE endpoint = ${endpoint}`;
+}
+
+/**
+ * Jeden wiersz na przebieg — dziennik zdrowia agenta (migracja 004).
+ *
+ * Zapis jest „best effort": jeśli padnie sam zapis, nie chcemy z tego powodu
+ * wywracać przebiegu, który poza tym dowiózł wpisy i powiadomienia.
+ */
+export async function saveRun(report: RunReport): Promise<void> {
+  try {
+    await db()`
+      INSERT INTO runs
+        (started_at, duration_ms, status, sources_ok, sources_failed,
+         candidates, fresh, assessed, delivered, errors)
+      VALUES
+        (${report.startedAt.toISOString()}, ${report.durationMs}, ${report.status},
+         ${report.sourcesOk}, ${report.sourcesFailed}, ${report.candidates},
+         ${report.fresh}, ${report.assessed}, ${report.delivered},
+         ${JSON.stringify(report.errors)}::jsonb)
+    `;
+  } catch (error: unknown) {
+    console.error("[monitor] nie udało się zapisać przebiegu:", error);
+  }
 }

@@ -4,7 +4,9 @@ import { InstallHint } from "@/components/pwa/install-hint";
 import { PushSettings } from "@/components/pwa/push-settings";
 import { PushToggle } from "@/components/pwa/push-toggle";
 import { Inbox } from "@/components/inbox";
+import { RunStatus } from "@/components/run-status";
 import { countUnread, listRead, listUnread } from "@/lib/items";
+import { getLastRunSafe } from "@/lib/runs";
 
 const TOPICS = ["TypeScript", "React", "JavaScript", "Fullstack", "AI"] as const;
 
@@ -12,10 +14,11 @@ const TOPICS = ["TypeScript", "React", "JavaScript", "Fullstack", "AI"] as const
 export const dynamic = "force-dynamic";
 
 export default async function HomePage() {
-  const [nieprzeczytane, przeczytane, liczba] = await Promise.all([
+  const [nieprzeczytane, przeczytane, liczba, ostatniPrzebieg] = await Promise.all([
     listUnread(),
     listRead(),
     countUnread(),
+    getLastRunSafe(),
   ]);
 
   return (
@@ -42,6 +45,8 @@ export default async function HomePage() {
           </div>
         </div>
       </header>
+
+      <RunStatus run={ostatniPrzebieg} />
 
       <InstallHint />
       <PushToggle />

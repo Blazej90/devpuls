@@ -2,6 +2,7 @@ import { z } from "zod";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 
 import { getAnthropic, MODEL } from "@/anthropic.js";
+import { noteError } from "@/monitor.js";
 import type { Assessment, NormalizedItem } from "@/types.js";
 
 const AssessmentSchema = z.object({
@@ -57,12 +58,14 @@ export async function assessItem(item: NormalizedItem): Promise<Assessment | nul
   // Pomijamy wpis zamiast wywracać cały przebieg.
   if (parsed.stop_reason === "refusal") {
     console.warn(`[claude] odmowa oceny: ${item.url}`);
+    noteError("claude", item.url, "model odmówił oceny");
     return null;
   }
 
   const output = parsed.parsed_output;
   if (!output) {
     console.warn(`[claude] pusty parsed_output dla: ${item.url}`);
+    noteError("claude", item.url, "pusty parsed_output");
     return null;
   }
 

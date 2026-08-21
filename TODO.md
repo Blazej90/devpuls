@@ -49,12 +49,13 @@ Agent aktualizuje ten plik na bieżąco, ale nigdy go nie commituje bez zgody
 - [x] Ustawienia (próg trafności, wybór kategorii) — per subskrypcja w bazie, respektowane przez agenta
 
 ## Faza 8 — Dopracowanie
-- [ ] Obsługa źródeł bez RSS (np. Anthropic News) przez scraping + Claude
-- [ ] Monitoring błędów pipeline'u
+- [x] Obsługa źródeł bez RSS (np. Anthropic News) przez scraping + Claude — `src/sources/scrape.ts`
+- [x] Monitoring błędów pipeline'u — tabela `runs` (migracja 004), `src/monitor.ts`,
+      pasek stanu w appce, `GET /api/health` i adnotacje w GitHub Actions
 
 ## Faza 9 — Digest i skrzynka odbiorcza (ADR-0002)
 - [x] Cron co 2 dni zamiast co 3h
 - [x] Jedno powiadomienie zbiorcze na przebieg zamiast jednego na wpis
 - [x] `items.read_at` + skrzynka odbiorcza z sekcją „Nowe" i archiwum
 - [x] Badge z liczbą nieprzeczytanych na ikonie PWA
-- [ ] Włączyć workflow z powrotem w GitHub Actions (wyłączony ręcznie)
+- [x] Włączyć workflow z powrotem w GitHub Actions

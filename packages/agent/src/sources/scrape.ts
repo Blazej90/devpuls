@@ -3,6 +3,7 @@ import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 
 import { getAnthropic, MODEL } from "@/anthropic.js";
 import { MAX_ITEMS_PER_SOURCE } from "@/config.js";
+import { noteError } from "@/monitor.js";
 import type { NormalizedItem, SourceConfig } from "@/types.js";
 
 /** Ile znaków HTML wysyłamy do modelu — strony indeksowe bywają ogromne. */
@@ -75,6 +76,7 @@ export async function fetchScrape(
 
   if (parsed.stop_reason === "refusal") {
     console.warn(`[${source.id}] model odmówił przetworzenia strony — pomijam źródło`);
+    noteError("source", source.id, "model odmówił przetworzenia strony");
     return [];
   }
 

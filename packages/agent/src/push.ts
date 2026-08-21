@@ -3,6 +3,7 @@ import webpush from "web-push";
 import { requireEnv } from "@/config.js";
 import { deleteSubscription, listSubscriptions } from "@/db.js";
 import type { PushSubscriptionRow } from "@/db.js";
+import { noteError } from "@/monitor.js";
 import type { AssessedItem } from "@/types.js";
 
 let configured = false;
@@ -133,6 +134,11 @@ export async function sendDigest(items: AssessedItem[]): Promise<number> {
       console.warn(`[push] usunięto wygasłą subskrypcję (${status})`);
     } else {
       console.error(`[push] błąd wysyłki (${status ?? "brak kodu"})`, result.reason);
+      noteError(
+        "push",
+        new URL(wpis.subscription.endpoint).hostname,
+        `HTTP ${status ?? "brak kodu"}`,
+      );
     }
   }
 
