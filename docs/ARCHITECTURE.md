@@ -60,9 +60,11 @@ devpuls/
 │       │           ├── subscribe/route.ts    # POST + DELETE subskrypcji
 │       │           └── settings/route.ts     # POST odczyt, PATCH zapis ustawień
 │       ├── components/
-│       │   ├── ui/               # button, card, badge, toggle(-group), background-beams
+│       │   ├── ui/               # button, card, badge, checkbox, toggle(-group),
+│       │   │                   #   separator, sonner, background-beams
 │       │   ├── pwa/              # sw, prompt instalacji, zgoda i ustawienia pushy
-│       │   ├── inbox.tsx         # skrzynka: „Nowe" + archiwum przeczytanych
+│       │   ├── inbox.tsx         # skrzynka: grupy dat, zaznaczanie, usuwanie
+│       │   ├── skrzynka-filtry.tsx # zakładki i chipy kategorii (linki)
 │       │   ├── run-status.tsx    # pasek zdrowia ostatniego przebiegu
 │       │   ├── theme-provider.tsx # next-themes, klasa `.dark` na <html>
 │       │   └── theme-toggle.tsx  # segment system / jasny / ciemny
@@ -70,6 +72,7 @@ devpuls/
 │       │   ├── utils.ts          # cn() — wymagane przez shadcn/Aceternity
 │       │   ├── db.ts             # klient Neona dla route handlerów
 │       │   ├── items.ts          # cała selekcja i zapisy wpisów (ADR-0003)
+│       │   ├── grupowanie.ts     # kubełki dat + formatowanie, strefa przypięta
 │       │   └── runs.ts           # ostatni przebieg agenta + próg „ciszy"
 │       └── public/
 │           ├── manifest.json
@@ -224,6 +227,29 @@ Kolory poza appką:
 
 Uwaga przy testach na `localhost`: `localStorage` jest wspólny dla całego originu, więc
 klucz `theme` bywa zapisany przez inny lokalny projekt korzystający z `next-themes`.
+
+## 5c. Skrzynka odbiorcza — stan w URL i podział po dacie
+
+Zakładka (`?widok=nowe|przeczytane|wszystkie`) i filtr kategorii (`?temat=`) żyją
+w **URL-u**, nie w stanie komponentu. Dzięki temu działa przycisk wstecz, odświeżenie nie
+gubi kontekstu i widok da się wysłać sobie na drugie urządzenie. Wartości domyślne są
+pomijane, więc adres bez parametrów to po prostu `/`.
+
+Nawigacja to zwykłe `<Link>`, a **nie** shadcn `tabs`: Radix przełącza panele po stronie
+klienta, a u nas każda zakładka to inne zapytanie do bazy. Kontrolowanie go URL-em
+oznaczałoby dwa źródła prawdy walczące o to samo.
+
+Podział na „Dziś / Wczoraj / W tym tygodniu / Starsze" liczy `lib/grupowanie.ts`.
+**Strefa jest przypięta do `Europe/Warsaw`, a nie brana ze środowiska** — komponent
+renderuje się najpierw na serwerze (Vercel liczy w UTC), a potem hydratuje w przeglądarce;
+wpis opublikowany o 00:30 czasu polskiego trafiłby na serwerze do „wczoraj", a u
+użytkownika do „dziś", co React zgłosiłby jako niezgodność hydratacji. Z tego samego
+powodu „dziś" ustala serwer i przekazuje w dół jako prop, zamiast żeby każda strona
+liczyła je sobie sama. Ta sama zasada dotyczy formatowania daty pod tytułem wpisu.
+
+Interakcje w `inbox.tsx` są optymistyczne z wycofaniem: karta znika od razu, a przy
+błędzie zapisu wraca razem z komunikatem. Cicha porażka jest tu groźniejsza niż widoczna —
+raz już wyglądała jak sukces, gdy `ids` z BIGINT-ów nie przechodziło walidacji.
 
 ## 6. Powiadomienia push (PWA + Web Push)
 

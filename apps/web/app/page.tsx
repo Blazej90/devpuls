@@ -6,21 +6,34 @@ import { PushToggle } from "@/components/pwa/push-toggle";
 import { Inbox } from "@/components/inbox";
 import { RunStatus } from "@/components/run-status";
 import { ThemeToggle } from "@/components/theme-toggle";
-import { countUnread, listRead, listUnread } from "@/lib/items";
+import { TematyFiltr, WidokTabs } from "@/components/skrzynka-filtry";
+import { dzienKalendarzowy } from "@/lib/grupowanie";
+import { countUnread, liczniki, listItems, parseTemat, parseWidok } from "@/lib/items";
 import { getLastRunSafe } from "@/lib/runs";
-
-const TOPICS = ["TypeScript", "React", "JavaScript", "Fullstack", "AI"] as const;
 
 /** Skrzynka czyta bazę przy każdym wejściu — po powiadomieniu ma być aktualna. */
 export const dynamic = "force-dynamic";
 
-export default async function HomePage() {
-  const [nieprzeczytane, przeczytane, liczba, ostatniPrzebieg] = await Promise.all([
-    listUnread(),
-    listRead(),
+export default async function HomePage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
+  const params = await searchParams;
+  const widok = parseWidok(params.widok);
+  const temat = parseTemat(params.temat);
+
+  const [wpisy, liczby, nieprzeczytane, ostatniPrzebieg] = await Promise.all([
+    listItems({ widok, temat }),
+    liczniki(temat),
     countUnread(),
     getLastRunSafe(),
   ]);
+
+  // Dzień ustalamy raz, po stronie serwera, i przekazujemy w dół — inaczej
+  // podział na "Dziś"/"Wczoraj" mógłby wypaść inaczej na serwerze niż
+  // w przeglądarce (szczegóły w `lib/grupowanie.ts`).
+  const dzisiaj = dzienKalendarzowy(new Date());
 
   return (
     <main className="mx-auto flex w-full max-w-2xl flex-col gap-8 px-6 py-12">
@@ -32,7 +45,7 @@ export default async function HomePage() {
           <div className="flex items-start justify-between gap-4">
             <div className="flex items-center gap-3">
               <h1 className="text-4xl font-semibold tracking-tight">DevPuls</h1>
-              {liczba > 0 && <Badge>{liczba} nowych</Badge>}
+              {nieprzeczytane > 0 && <Badge>{nieprzeczytane} nowych</Badge>}
             </div>
             <ThemeToggle />
           </div>
@@ -40,13 +53,6 @@ export default async function HomePage() {
             Nowinki techniczne przefiltrowane pod kątem trafności i streszczone po
             polsku, z linkiem do oryginalnego źródła.
           </p>
-          <div className="flex flex-wrap gap-2">
-            {TOPICS.map((topic) => (
-              <Badge key={topic} variant="secondary">
-                {topic}
-              </Badge>
-            ))}
-          </div>
         </div>
       </header>
 
@@ -56,7 +62,12 @@ export default async function HomePage() {
       <PushToggle />
       <PushSettings />
 
-      <Inbox nieprzeczytane={nieprzeczytane} przeczytane={przeczytane} />
+      <div className="space-y-4">
+        <WidokTabs widok={widok} temat={temat} liczniki={liczby} />
+        <TematyFiltr widok={widok} temat={temat} />
+      </div>
+
+      <Inbox wpisy={wpisy} widok={widok} dzisiaj={dzisiaj} />
     </main>
   );
 }

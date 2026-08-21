@@ -26,6 +26,22 @@ export const TEMATY = [
 ] as const;
 export type Temat = (typeof TEMATY)[number];
 
+/** Etykiety kategorii w UI. Klucze muszą pokrywać się z `TEMATY`. */
+export const ETYKIETY_TEMATOW: Record<Temat, string> = {
+  typescript: "TypeScript",
+  react: "React",
+  javascript: "JavaScript",
+  fullstack: "Fullstack",
+  ai: "AI",
+  inne: "Inne",
+};
+
+export const ETYKIETY_WIDOKOW: Record<Widok, string> = {
+  nowe: "Nowe",
+  przeczytane: "Przeczytane",
+  wszystkie: "Wszystkie",
+};
+
 export interface Filtr {
   widok: Widok;
   /** `null` = bez zawężenia do kategorii. */

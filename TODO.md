@@ -86,13 +86,18 @@ Agent aktualizuje ten plik na bieżąco, ale nigdy go nie commituje bez zgody
       zależeć od tego, który motyw akurat wybrał użytkownik
 
 ### Etap 3 — skrzynka
-- [ ] Zakładki Nowe / Przeczytane / Wszystkie, stan w URL (`?widok=`)
-- [ ] Chipy tematów jako działający filtr, stan w URL (`?temat=`)
-- [ ] Grupowanie po dacie: Dziś / Wczoraj / W tym tygodniu / Starsze
-- [ ] Karta: wyeksponowane „Przeczytane”; **otwarcie linku przestaje oznaczać wpis**
-- [ ] „Oznacz grupę” przy nagłówku sekcji
-- [ ] Tryb zaznaczania: checkboxy + pasek akcji zbiorczych (oznacz / usuń)
-- [ ] Usuwanie pojedyncze i zbiorcze + toast „Cofnij”
+- [x] Zakładki Nowe / Przeczytane / Wszystkie z licznikami, stan w URL (`?widok=`).
+      Zwykłe linki, nie shadcn `tabs` — każda zakładka to inne zapytanie do bazy,
+      a Radix przełącza panele po stronie klienta
+- [x] Chipy tematów jako działający filtr, stan w URL (`?temat=`); zakładka i filtr
+      wzajemnie się zachowują
+- [x] Grupowanie po dacie: Dziś / Wczoraj / W tym tygodniu / Starsze —
+      `lib/grupowanie.ts`, strefa przypięta do Europe/Warsaw
+- [x] Karta: `outline` zamiast `ghost` przy „Przeczytane”; **otwarcie linku już nie
+      oznacza wpisu**
+- [x] „Oznacz grupę” przy nagłówku sekcji, widoczne tylko gdy grupa ma nieodhaczone
+- [x] Checkboxy na kartach + pasek akcji zbiorczych (`fixed`, w zasięgu kciuka)
+- [x] Usuwanie pojedyncze i zbiorcze + toast „Cofnij” (shadcn `sonner`)
 
 ### Etap 4 — treść i tożsamość
 - [ ] Hero — nowa treść, bardziej produkcyjna
@@ -106,4 +111,6 @@ Agent aktualizuje ten plik na bieżąco, ale nigdy go nie commituje bez zgody
       (ADR-0003)
 
 ### Dług
-- [ ] Paginacja skrzynki — `listUnread` ma twardy limit 100, `listRead` 30
+- [ ] Paginacja skrzynki — `listItems` ma twardy limit 100 na każdą zakładkę.
+      Po Etapie 3 „Przeczytane” potrafi wyrenderować 100 kart naraz; grupowanie
+      po dacie porządkuje je, ale nie zmniejsza

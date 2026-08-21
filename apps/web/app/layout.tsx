@@ -4,6 +4,7 @@ import Script from "next/script";
 
 import { ServiceWorkerRegistrar } from "@/components/pwa/service-worker-registrar";
 import { ThemeProvider } from "@/components/theme-provider";
+import { Toaster } from "@/components/ui/sonner";
 import { INSTALL_PROMPT_BOOTSTRAP } from "@/components/pwa/install-prompt-store";
 import "@/app/globals.css";
 
@@ -54,7 +55,12 @@ export default function RootLayout({
         <Script id="devpuls-install-prompt" strategy="beforeInteractive">
           {INSTALL_PROMPT_BOOTSTRAP}
         </Script>
-        <ThemeProvider>{children}</ThemeProvider>
+        <ThemeProvider>
+          {children}
+          {/* Toasty niosą akcję "Cofnij" po usunięciu wpisu (ADR-0003),
+              więc muszą siedzieć wewnątrz providera — sonner czyta z niego motyw. */}
+          <Toaster position="bottom-center" />
+        </ThemeProvider>
         <ServiceWorkerRegistrar />
       </body>
     </html>
