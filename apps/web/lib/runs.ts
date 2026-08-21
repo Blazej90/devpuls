@@ -25,7 +25,8 @@ export interface LastRun {
 }
 
 interface RunRow {
-  finished_at: string;
+  /** TIMESTAMPTZ — sterownik Neona parsuje go do obiektu `Date`, nie do stringa. */
+  finished_at: Date | string;
   duration_ms: number;
   status: RunStatus;
   sources_ok: number;
@@ -56,7 +57,10 @@ export async function getLastRun(): Promise<LastRun | null> {
   if (!row) return null;
 
   return {
-    finishedAt: row.finished_at,
+    finishedAt:
+      row.finished_at instanceof Date
+        ? row.finished_at.toISOString()
+        : row.finished_at,
     durationMs: row.duration_ms,
     status: row.status,
     sourcesOk: row.sources_ok,

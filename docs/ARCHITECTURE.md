@@ -37,7 +37,8 @@ devpuls/
 │   └── adr/
 │       ├── template.md
 │       ├── 0001-poc-architecture.md
-│       └── 0002-digest-i-skrzynka-odbiorcza.md
+│       ├── 0002-digest-i-skrzynka-odbiorcza.md
+│       └── 0003-przebudowa-ux-skrzynki.md
 ├── apps/
 │   └── web/                      # Next.js PWA
 │       ├── package.json
@@ -54,6 +55,7 @@ devpuls/
 │       │   └── api/
 │       │       ├── health/route.ts           # GET stan pipeline'u (200/503)
 │       │       ├── items/read/route.ts       # POST oznaczenie jako przeczytane
+│       │       ├── items/delete/route.ts     # POST miękkie usunięcie + cofnięcie
 │       │       └── push/
 │       │           ├── subscribe/route.ts    # POST + DELETE subskrypcji
 │       │           └── settings/route.ts     # POST odczyt, PATCH zapis ustawień
@@ -65,7 +67,7 @@ devpuls/
 │       ├── lib/
 │       │   ├── utils.ts          # cn() — wymagane przez shadcn/Aceternity
 │       │   ├── db.ts             # klient Neona dla route handlerów
-│       │   ├── items.ts          # skrzynka: nieprzeczytane / przeczytane / licznik
+│       │   ├── items.ts          # cała selekcja i zapisy wpisów (ADR-0003)
 │       │   └── runs.ts           # ostatni przebieg agenta + próg „ciszy"
 │       └── public/
 │           ├── manifest.json
@@ -81,7 +83,8 @@ devpuls/
 │       │   ├── 001_init.sql     # schemat startowy (idempotentny DDL)
 │       │   ├── 002_topics_and_settings.sql
 │       │   ├── 003_read_state.sql
-│       │   └── 004_run_log.sql  # tabela `runs` — dziennik zdrowia
+│       │   ├── 004_run_log.sql  # tabela `runs` — dziennik zdrowia
+│       │   └── 005_soft_delete_and_recency.sql
 │       ├── config/
 │       │   └── sources.json
 │       └── src/
@@ -254,10 +257,24 @@ Migracja 004 dołożyła `runs(id, started_at, finished_at, duration_ms, status,
 sources_failed, candidates, fresh, assessed, delivered, errors)` — dziennik zdrowia agenta,
 jeden wiersz na przebieg, `errors` jako JSONB. Szczegóły w sekcji 9.
 
+Migracja 005 dołożyła `items.deleted_at` (miękkie usuwanie, ADR-0003) i przestawiła
+kolejność skrzynki na `COALESCE(published_at, created_at)`. Usuwanie **musi** być
+miękkie: `items.url` z UNIQUE to jedyna ochrona przed ponownym pobraniem artykułu, więc
+po twardym DELETE wpis wróciłby przy najbliższym przebiegu razem z powiadomieniem.
+Konsekwencja: **każde** zapytanie o wpisy filtruje `deleted_at IS NULL` — dlatego cała
+selekcja i wszystkie zapisy siedzą w `apps/web/lib/items.ts`, a route handlery nie piszą
+własnego SQL-a.
+
 Indeksy: `(relevance_score DESC, published_at DESC)` pod listę w UI, częściowy
 `(created_at DESC) WHERE notified_at IS NULL` pod "co jeszcze nie poszło pushem",
-częściowy `(created_at DESC) WHERE read_at IS NULL` pod skrzynkę odbiorczą oraz
-`runs(finished_at DESC)` pod odczyt ostatniego przebiegu.
+dwa częściowe na wyrażeniu `COALESCE(published_at, created_at) DESC` — `items_unread_idx`
+(`WHERE read_at IS NULL AND deleted_at IS NULL`) pod zakładkę "Nowe" i `items_recency_idx`
+(`WHERE deleted_at IS NULL`) pod pozostałe — oraz `runs(finished_at DESC)` pod odczyt
+ostatniego przebiegu.
+
+Pułapka sterownika: Neon zwraca BIGINT jako **string**, a TIMESTAMPTZ jako obiekt
+**`Date`**. Oba są normalizowane na granicy modułu (`toItem` w `lib/items.ts`,
+`insertItem` w `packages/agent/src/db.ts`), żeby reszta kodu o tym nie pamiętała.
 
 Migracje uruchamia `pnpm agent:migrate` — każdy plik z `sql/` leci w jednej transakcji
 i jest zapisywany w `schema_migrations`, więc powtórne uruchomienie nic nie robi.

@@ -59,3 +59,45 @@ Agent aktualizuje ten plik na bieżąco, ale nigdy go nie commituje bez zgody
 - [x] `items.read_at` + skrzynka odbiorcza z sekcją „Nowe" i archiwum
 - [x] Badge z liczbą nieprzeczytanych na ikonie PWA
 - [x] Włączyć workflow z powrotem w GitHub Actions
+
+## Faza 10 — Przebudowa UX/UI (ADR-0003)
+
+### Etap 1 — fundament danych
+- [x] Migracja 005: `items.deleted_at`, indeksy `items_unread_idx` i `items_recency_idx`
+      pod `COALESCE(published_at, created_at) DESC` z warunkiem `deleted_at IS NULL`
+- [x] `lib/items.ts`: sortowanie po dacie publikacji, filtr `deleted_at IS NULL`,
+      `listItems` / `liczniki` pod zakładki i filtr tematu, zapisy (`markRead`,
+      `markAllRead`, `softDelete`, `restore`) w tym samym module
+- [x] `POST /api/items/delete` — miękkie usuwanie `{ids}` + cofnięcie `{przywroc:true}`
+- [x] `POST /api/items/read` — `{ids}` obsługuje grupę i zaznaczenie wielu;
+      `{all:true}` zawężone opcjonalnym `temat`
+- [x] Normalizacja TIMESTAMPTZ do ISO — sterownik Neona zwraca `Date`, nie string
+      (dotyczyło też `lib/runs.ts`)
+
+### Etap 2 — motyw jasny/ciemny
+- [ ] `next-themes` + provider, klasa na `<html>`, skrypt przed hydratacją
+- [ ] Przełącznik system / jasny / ciemny
+- [ ] Naprawa `manifest.json` i `theme-color` — dziś splash jest czarny, appka biała
+
+### Etap 3 — skrzynka
+- [ ] Zakładki Nowe / Przeczytane / Wszystkie, stan w URL (`?widok=`)
+- [ ] Chipy tematów jako działający filtr, stan w URL (`?temat=`)
+- [ ] Grupowanie po dacie: Dziś / Wczoraj / W tym tygodniu / Starsze
+- [ ] Karta: wyeksponowane „Przeczytane”; **otwarcie linku przestaje oznaczać wpis**
+- [ ] „Oznacz grupę” przy nagłówku sekcji
+- [ ] Tryb zaznaczania: checkboxy + pasek akcji zbiorczych (oznacz / usuń)
+- [ ] Usuwanie pojedyncze i zbiorcze + toast „Cofnij”
+
+### Etap 4 — treść i tożsamość
+- [ ] Hero — nowa treść, bardziej produkcyjna
+- [ ] Sekcja „O aplikacji” + autor (GitHub, portfolio, LinkedIn)
+- [ ] Logo DevPuls jako SVG
+- [ ] Ikony PWA wygenerowane z SVG (PNG zostaje dla `apple-touch-icon` i maskable)
+
+### Odrzucone
+- [x] ~~Pasek z automatycznie przewijanymi newsami~~ — powielałby pierwsze karty
+      skrzynki, wymaga kontrolki pauzy (WCAG 2.2.2) i zjada przestrzeń na telefonie
+      (ADR-0003)
+
+### Dług
+- [ ] Paginacja skrzynki — `listUnread` ma twardy limit 100, `listRead` 30
