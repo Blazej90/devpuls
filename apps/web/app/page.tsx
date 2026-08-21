@@ -5,6 +5,7 @@ import { PushSettings } from "@/components/pwa/push-settings";
 import { PushToggle } from "@/components/pwa/push-toggle";
 import { Inbox } from "@/components/inbox";
 import { RunStatus } from "@/components/run-status";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { countUnread, listRead, listUnread } from "@/lib/items";
 import { getLastRunSafe } from "@/lib/runs";
 
@@ -28,9 +29,12 @@ export default async function HomePage() {
       <header className="relative -mx-6 -mt-12 overflow-hidden px-6 pt-12 pb-8">
         <BackgroundBeams className="pointer-events-none" />
         <div className="relative z-10 space-y-4">
-          <div className="flex items-center gap-3">
-            <h1 className="text-4xl font-semibold tracking-tight">DevPuls</h1>
-            {liczba > 0 && <Badge>{liczba} nowych</Badge>}
+          <div className="flex items-start justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <h1 className="text-4xl font-semibold tracking-tight">DevPuls</h1>
+              {liczba > 0 && <Badge>{liczba} nowych</Badge>}
+            </div>
+            <ThemeToggle />
           </div>
           <p className="text-muted-foreground text-balance">
             Nowinki techniczne przefiltrowane pod kątem trafności i streszczone po

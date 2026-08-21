@@ -75,9 +75,15 @@ Agent aktualizuje ten plik na bieżąco, ale nigdy go nie commituje bez zgody
       (dotyczyło też `lib/runs.ts`)
 
 ### Etap 2 — motyw jasny/ciemny
-- [ ] `next-themes` + provider, klasa na `<html>`, skrypt przed hydratacją
-- [ ] Przełącznik system / jasny / ciemny
-- [ ] Naprawa `manifest.json` i `theme-color` — dziś splash jest czarny, appka biała
+- [x] `next-themes` + `components/theme-provider.tsx`, klasa na `<html>`,
+      skrypt ustawiający ją przed pierwszym malowaniem
+- [x] Przełącznik trójstanowy system / jasny / ciemny — `components/theme-toggle.tsx`
+      na shadcn `toggle-group`; aktywny segment na `primary`, bo domyślne `accent`
+      daje w trybie jasnym kontrast 1,08:1 (nie widać, co jest wybrane)
+- [x] `manifest.json`: `theme_color`/`background_color` z `#0a0a0a` na `#ffffff` —
+      splash był czarny, a appka renderowała się na biało
+- [ ] Do rewizji w Etapie 4: kolor splash-a jako barwa marki, wtedy przestanie
+      zależeć od tego, który motyw akurat wybrał użytkownik
 
 ### Etap 3 — skrzynka
 - [ ] Zakładki Nowe / Przeczytane / Wszystkie, stan w URL (`?widok=`)

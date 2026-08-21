@@ -3,6 +3,7 @@ import type { Metadata, Viewport } from "next";
 import Script from "next/script";
 
 import { ServiceWorkerRegistrar } from "@/components/pwa/service-worker-registrar";
+import { ThemeProvider } from "@/components/theme-provider";
 import { INSTALL_PROMPT_BOOTSTRAP } from "@/components/pwa/install-prompt-store";
 import "@/app/globals.css";
 
@@ -32,6 +33,9 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
+  // Pasek przeglądarki podąża za preferencją systemu. To nie to samo co
+  // `theme_color` w manifeście, który maluje splash **przed** wczytaniem strony
+  // i jako statyczny JSON nie umie reagować na motyw — patrz komentarz tam.
   themeColor: [
     { media: "(prefers-color-scheme: light)", color: "#ffffff" },
     { media: "(prefers-color-scheme: dark)", color: "#0a0a0a" },
@@ -50,7 +54,7 @@ export default function RootLayout({
         <Script id="devpuls-install-prompt" strategy="beforeInteractive">
           {INSTALL_PROMPT_BOOTSTRAP}
         </Script>
-        {children}
+        <ThemeProvider>{children}</ThemeProvider>
         <ServiceWorkerRegistrar />
       </body>
     </html>

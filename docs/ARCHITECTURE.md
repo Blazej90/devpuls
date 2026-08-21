@@ -60,10 +60,12 @@ devpuls/
 │       │           ├── subscribe/route.ts    # POST + DELETE subskrypcji
 │       │           └── settings/route.ts     # POST odczyt, PATCH zapis ustawień
 │       ├── components/
-│       │   ├── ui/               # button, card, badge, background-beams
+│       │   ├── ui/               # button, card, badge, toggle(-group), background-beams
 │       │   ├── pwa/              # sw, prompt instalacji, zgoda i ustawienia pushy
 │       │   ├── inbox.tsx         # skrzynka: „Nowe" + archiwum przeczytanych
-│       │   └── run-status.tsx    # pasek zdrowia ostatniego przebiegu
+│       │   ├── run-status.tsx    # pasek zdrowia ostatniego przebiegu
+│       │   ├── theme-provider.tsx # next-themes, klasa `.dark` na <html>
+│       │   └── theme-toggle.tsx  # segment system / jasny / ciemny
 │       ├── lib/
 │       │   ├── utils.ts          # cn() — wymagane przez shadcn/Aceternity
 │       │   ├── db.ts             # klient Neona dla route handlerów
@@ -192,6 +194,36 @@ własna aplikacja OAuth Reddita.
   (`eslint.config.mjs`, flat config, `eslint-config-next`). ESLint trzymamy na **v9**:
   `eslint-plugin-react` (tranzytywnie z `eslint-config-next`) wywala się na ESLint 10
   (`context.getFilename is not a function`).
+
+## 5b. Motyw jasny/ciemny
+
+Do Etapu 2 przebudowy UX (ADR-0003) blok `.dark` w `globals.css` był **martwym kodem**:
+pełna paleta tokenów istniała, ale nic nigdy nie dodawało klasy `.dark` do dokumentu,
+więc żaden wariant `dark:` w Tailwindzie się nie uruchamiał.
+
+Motywem steruje `next-themes` (`attribute="class"`, `defaultTheme="system"`). Biblioteka,
+a nie własny `useState`, bo wstrzykuje skrypt ustawiający klasę **przed** pierwszym
+malowaniem — rozwiązanie na efekcie czytałoby preferencję dopiero po hydratacji, więc przy
+każdym wejściu w trybie ciemnym mignęłoby białe tło.
+
+Trzy stany, nie dwa: „systemowy" jest osobną opcją, a nie stanem startowym znikającym po
+pierwszym kliknięciu. Bez niego nie da się wrócić do podążania za ustawieniem telefonu,
+a to jedyny tryb, który sam przełącza się wieczorem. Wybór trafia do `localStorage` pod
+kluczem `theme` jako **ustawienie** (`system`), nie jako wynik (`dark`) — dzięki temu
+zmiana motywu w systemie nadal działa.
+
+Kolory poza appką:
+
+- `viewport.themeColor` w `layout.tsx` — pasek przeglądarki, dwa warianty po
+  `prefers-color-scheme`, przełączane w locie.
+- `manifest.json` — `theme_color` i `background_color` malują splash **przed** wczytaniem
+  strony. Statyczny JSON nie umie reagować na motyw, więc jedna wartość musi obsłużyć oba.
+  Do Etapu 2 stało tam `#0a0a0a`, choć appka renderowała się na biało — splash był czarny,
+  po czym strona błyskała bielą. Teraz `#ffffff`, zgodnie z domyślnym `:root`.
+  Do rewizji przy logo (Etap 4): barwa marki działałaby w obu motywach.
+
+Uwaga przy testach na `localhost`: `localStorage` jest wspólny dla całego originu, więc
+klucz `theme` bywa zapisany przez inny lokalny projekt korzystający z `next-themes`.
 
 ## 6. Powiadomienia push (PWA + Web Push)
 
