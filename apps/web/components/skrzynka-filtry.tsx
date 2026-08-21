@@ -1,10 +1,12 @@
 import Link from "next/link";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import {
   ETYKIETY_TEMATOW,
   ETYKIETY_WIDOKOW,
   TEMATY,
+  ROZMIAR_STRONY,
   WIDOKI,
   type Temat,
   type Widok,
@@ -19,15 +21,22 @@ import {
  * klienta, a każda zakładka to u nas inne zapytanie do bazy. Kontrolowanie go
  * URL-em oznaczałoby walkę dwóch źródeł prawdy o to samo.
  */
-function adres(widok: Widok, temat: Temat | null): string {
+function adres(widok: Widok, temat: Temat | null, strona = 1): string {
   const params = new URLSearchParams();
   // Wartości domyślne pomijamy, żeby „czysty" adres to było po prostu `/`.
   if (widok !== "nowe") params.set("widok", widok);
   if (temat) params.set("temat", temat);
+  if (strona > 1) params.set("strona", String(strona));
 
   const query = params.toString();
   return query ? `/?${query}` : "/";
 }
+
+/**
+ * Zmiana zakładki albo kategorii **resetuje stronę** — `adres` wywołane bez
+ * trzeciego argumentu pomija `strona`. Inaczej przejście na kategorię z trzema
+ * wpisami przy otwartej stronie czwartej pokazałoby pustą listę.
+ */
 
 /**
  * Nawigacja skrzynki: zakładki (poziom widoku) nad chipami (poziom filtra).
@@ -116,5 +125,101 @@ export function SkrzynkaNawigacja({
         })}
       </nav>
     </div>
+  );
+}
+
+/**
+ * Przejście między stronami skrzynki.
+ *
+ * Osobny komponent pod listą, a nie kontrolka w `inbox.tsx`: to nawigacja po
+ * URL-u, tak samo jak zakładki, więc nie ma powodu wciągać jej w stan kliencki.
+ * `<Link>` przewija na górę po zmianie strony — przy paginacji to jest to,
+ * czego się oczekuje.
+ */
+export function Paginacja({
+  widok,
+  temat,
+  strona,
+  jestWiecej,
+  pokazano,
+  wszystkich,
+}: {
+  widok: Widok;
+  temat: Temat | null;
+  strona: number;
+  jestWiecej: boolean;
+  pokazano: number;
+  wszystkich: number;
+}) {
+  // Jedna strona mieści komplet — nie ma po czym nawigować.
+  if (strona === 1 && !jestWiecej) return null;
+
+  const pierwszy = (strona - 1) * ROZMIAR_STRONY + 1;
+  const ostatni = pierwszy + pokazano - 1;
+
+  return (
+    <nav
+      aria-label="Strony skrzynki"
+      className="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-4"
+    >
+      <PrzyciskStrony
+        href={adres(widok, temat, strona - 1)}
+        aktywny={strona > 1}
+        etykieta="Poprzednia"
+      >
+        <ChevronLeft className="size-4" aria-hidden />
+        Poprzednia
+      </PrzyciskStrony>
+
+      <p className="text-muted-foreground text-xs tabular-nums">
+        {pokazano > 0 ? `${pierwszy}–${ostatni}` : "0"} z {wszystkich}
+      </p>
+
+      <PrzyciskStrony
+        href={adres(widok, temat, strona + 1)}
+        aktywny={jestWiecej}
+        etykieta="Następna"
+      >
+        Następna
+        <ChevronRight className="size-4" aria-hidden />
+      </PrzyciskStrony>
+    </nav>
+  );
+}
+
+/** Nieaktywny kierunek renderujemy jako `<span>`, nie wyszarzony link —
+ *  martwy odnośnik myli czytnik ekranu i kusi do kliknięcia. */
+function PrzyciskStrony({
+  href,
+  aktywny,
+  etykieta,
+  children,
+}: {
+  href: string;
+  aktywny: boolean;
+  etykieta: string;
+  children: React.ReactNode;
+}) {
+  const klasy = "inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm transition-colors";
+
+  if (!aktywny) {
+    return (
+      <span aria-hidden className={cn(klasy, "text-muted-foreground/40")}>
+        {children}
+      </span>
+    );
+  }
+
+  return (
+    <Link
+      href={href}
+      aria-label={etykieta}
+      className={cn(
+        klasy,
+        "text-foreground hover:bg-accent focus-visible:ring-ring focus-visible:ring-1 focus-visible:outline-none",
+      )}
+    >
+      {children}
+    </Link>
   );
 }

@@ -133,6 +133,8 @@ Agent aktualizuje ten plik na bieżąco, ale nigdy go nie commituje bez zgody
       (ADR-0003)
 
 ### Dług
-- [ ] Paginacja skrzynki — `listItems` ma twardy limit 100 na każdą zakładkę.
-      Po Etapie 3 „Przeczytane” potrafi wyrenderować 100 kart naraz; grupowanie
-      po dacie porządkuje je, ale nie zmniejsza
+- [x] Paginacja skrzynki — 30 wpisów na stronę, `?strona=` w URL-u.
+      Klasyczne strony przez OFFSET, nie doładowywanie rosnącym limitem:
+      archiwum rośnie bez górnej granicy, a tak rozmiar odpowiedzi zostaje stały
+      niezależnie od tego, jak głęboko sięgamy. Zmiana zakładki albo kategorii
+      resetuje stronę

@@ -158,9 +158,41 @@ function budujWarunki(filtr: Filtr): { where: string; params: unknown[] } {
   return { where: czesci.join(" AND "), params };
 }
 
-export async function listItems(filtr: Filtr, limit = 100): Promise<NewsItem[]> {
+/** Ile wpisów mieści jedna strona skrzynki. */
+export const ROZMIAR_STRONY = 30;
+
+/** Numer strony z adresu; musi znieść dowolne wejście, bo to parametr URL-a. */
+export function parseStrona(raw: string | string[] | undefined): number {
+  const liczba = Number(Array.isArray(raw) ? raw[0] : raw);
+  return Number.isInteger(liczba) && liczba > 1 ? liczba : 1;
+}
+
+export interface Strona {
+  wpisy: NewsItem[];
+  /** Czy za tą stroną są jeszcze starsze wpisy. */
+  jestWiecej: boolean;
+}
+
+/**
+ * Jedna strona skrzynki.
+ *
+ * Klasyczne strony przez OFFSET, a nie doładowywanie rosnącym limitem: archiwum
+ * przyrasta o kilkanaście wpisów co dwa dni i nie ma górnej granicy, więc rosnący
+ * limit prędzej czy później zaczyna ciągnąć setki rekordów na jedno żądanie.
+ * Tutaj rozmiar odpowiedzi jest stały niezależnie od tego, jak głęboko sięgamy.
+ *
+ * Świadomy kompromis: przy OFFSET granice stron przesuwają się, gdy wpis zmieni
+ * przynależność do zakładki (odhaczenie, usunięcie). Kursor by tego uniknął, ale
+ * odebrałby możliwość skoku na konkretną stronę — a to jest sedno paginacji.
+ */
+export async function listItems(filtr: Filtr, strona = 1): Promise<Strona> {
   const { where, params } = budujWarunki(filtr);
-  params.push(limit);
+
+  // Jeden wiersz ponad stronę: tanie i dokładne "czy jest ciąg dalszy",
+  // niezależne od licznika z osobnego zapytania.
+  params.push(ROZMIAR_STRONY + 1);
+  const limitParam = params.length;
+  params.push((strona - 1) * ROZMIAR_STRONY);
 
   const rows = (await sql().query(
     `SELECT
@@ -171,11 +203,14 @@ export async function listItems(filtr: Filtr, limit = 100): Promise<NewsItem[]> 
      JOIN sources s ON s.id = i.source_id
      WHERE ${where}
      ORDER BY ${RECENCY} DESC
-     LIMIT $${params.length}`,
+     LIMIT $${limitParam} OFFSET $${params.length}`,
     params,
   )) as ItemRow[];
 
-  return rows.map(toItem);
+  return {
+    wpisy: rows.slice(0, ROZMIAR_STRONY).map(toItem),
+    jestWiecej: rows.length > ROZMIAR_STRONY,
+  };
 }
 
 /**
@@ -212,22 +247,6 @@ export async function countUnread(): Promise<number> {
   `) as { n: number }[];
 
   return rows[0]?.n ?? 0;
-}
-
-/**
- * Skróty zachowane, dopóki skrzynka nie przejdzie na zakładki (Etap 3).
- *
- * Uwaga na zmianę względem Fazy 9: „Przeczytane" idą teraz od najnowszych
- * **publikacji**, a nie od ostatnio przeczytanych. To świadome — po wprowadzeniu
- * grupowania po dacie obie zakładki muszą dzielić ten sam porządek, inaczej
- * nagłówki sekcji znaczyłyby w każdej co innego.
- */
-export function listUnread(limit = 100): Promise<NewsItem[]> {
-  return listItems({ widok: "nowe", temat: null }, limit);
-}
-
-export function listRead(limit = 30): Promise<NewsItem[]> {
-  return listItems({ widok: "przeczytane", temat: null }, limit);
 }
 
 /* ---------------------------------------------------------------------------

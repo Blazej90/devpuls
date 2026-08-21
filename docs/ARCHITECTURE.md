@@ -255,6 +255,16 @@ użytkownika do „dziś", co React zgłosiłby jako niezgodność hydratacji. Z
 powodu „dziś" ustala serwer i przekazuje w dół jako prop, zamiast żeby każda strona
 liczyła je sobie sama. Ta sama zasada dotyczy formatowania daty pod tytułem wpisu.
 
+Lista jest stronicowana po 30 wpisów, numer strony w `?strona=`. Klasyczne strony
+przez OFFSET, a nie doładowywanie rosnącym limitem: archiwum przyrasta o kilkanaście
+wpisów co dwa dni i nie ma górnej granicy, więc rosnący limit prędzej czy później
+zacząłby ciągnąć setki rekordów na jedno żądanie. Tak rozmiar odpowiedzi jest stały
+niezależnie od tego, jak głęboko sięgamy. Świadomy kompromis: przy OFFSET granice stron
+przesuwają się, gdy wpis zmieni przynależność do zakładki — kursor by tego uniknął, ale
+odebrałby możliwość skoku na konkretną stronę. Zmiana zakładki albo kategorii **resetuje
+stronę**, inaczej przejście na kategorię z trzema wpisami przy otwartej stronie czwartej
+pokazywałoby pustkę.
+
 Interakcje w `inbox.tsx` są optymistyczne z wycofaniem: karta znika od razu, a przy
 błędzie zapisu wraca razem z komunikatem. Cicha porażka jest tu groźniejsza niż widoczna —
 raz już wyglądała jak sukces, gdy `ids` z BIGINT-ów nie przechodziło walidacji.

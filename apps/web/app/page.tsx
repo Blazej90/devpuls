@@ -5,13 +5,14 @@ import { PushToggle } from "@/components/pwa/push-toggle";
 import { DoGory } from "@/components/do-gory";
 import { Inbox } from "@/components/inbox";
 import { RunStatus } from "@/components/run-status";
-import { SkrzynkaNawigacja } from "@/components/skrzynka-filtry";
+import { Paginacja, SkrzynkaNawigacja } from "@/components/skrzynka-filtry";
 import { dzienKalendarzowy } from "@/lib/grupowanie";
 import {
   countSources,
   countUnread,
   liczniki,
   listItems,
+  parseStrona,
   parseTemat,
   parseWidok,
 } from "@/lib/items";
@@ -28,14 +29,16 @@ export default async function HomePage({
   const params = await searchParams;
   const widok = parseWidok(params.widok);
   const temat = parseTemat(params.temat);
+  const strona = parseStrona(params.strona);
 
-  const [wpisy, liczby, nieprzeczytane, zrodel, ostatniPrzebieg] = await Promise.all([
-    listItems({ widok, temat }),
-    liczniki(temat),
-    countUnread(),
-    countSources(),
-    getLastRunSafe(),
-  ]);
+  const [{ wpisy, jestWiecej }, liczby, nieprzeczytane, zrodel, ostatniPrzebieg] =
+    await Promise.all([
+      listItems({ widok, temat }, strona),
+      liczniki(temat),
+      countUnread(),
+      countSources(),
+      getLastRunSafe(),
+    ]);
 
   // Dzień ustalamy raz, po stronie serwera, i przekazujemy w dół — inaczej
   // podział na "Dziś"/"Wczoraj" mógłby wypaść inaczej na serwerze niż
@@ -55,6 +58,15 @@ export default async function HomePage({
       <SkrzynkaNawigacja widok={widok} temat={temat} liczniki={liczby} />
 
       <Inbox wpisy={wpisy} widok={widok} dzisiaj={dzisiaj} />
+
+      <Paginacja
+        widok={widok}
+        temat={temat}
+        strona={strona}
+        jestWiecej={jestWiecej}
+        pokazano={wpisy.length}
+        wszystkich={liczby[widok]}
+      />
 
       <DoGory />
     </main>
