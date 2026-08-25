@@ -5,26 +5,27 @@ import { sql } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
-/** Kategorie zwracane przez `packages/agent/src/claude.ts`. */
-const TOPICS = ["typescript", "react", "javascript", "fullstack", "ai", "inne"] as const;
+/** Categories returned by `packages/agent/src/claude.ts`. */
+const TOPICS = ["typescript", "react", "javascript", "fullstack", "ai", "other"] as const;
 
 /**
- * Endpoint subskrypcji identyfikuje urządzenie, więc chodzi wyłącznie w ciele
- * żądania — nigdy w query stringu, żeby nie lądował w logach ani historii.
+ * The subscription endpoint identifies the device, so it travels in the request
+ * body only — never in a query string, so it does not end up in logs or in
+ * browser history.
  */
 const EndpointSchema = z.object({ endpoint: z.url().max(2048) });
 
 const SettingsSchema = EndpointSchema.extend({
   minRelevance: z.number().int().min(1).max(5),
-  // null = wszystkie kategorie.
+  // null = all categories.
   topics: z.array(z.enum(TOPICS)).nullable(),
 });
 
-/** Odczyt ustawień danej subskrypcji. */
+/** Reading the settings of a given subscription. */
 export async function POST(request: Request) {
   const parsed = EndpointSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) {
-    return NextResponse.json({ error: "Brak endpointu" }, { status: 400 });
+    return NextResponse.json({ error: "Missing endpoint" }, { status: 400 });
   }
 
   const rows = (await sql()`
@@ -34,22 +35,22 @@ export async function POST(request: Request) {
 
   const row = rows[0];
   if (!row) {
-    return NextResponse.json({ error: "Nie znaleziono subskrypcji" }, { status: 404 });
+    return NextResponse.json({ error: "Subscription not found" }, { status: 404 });
   }
 
   return NextResponse.json({ minRelevance: row.min_relevance, topics: row.topics });
 }
 
-/** Zapis ustawień. Agent czyta je przy każdej wysyłce, więc działają od razu. */
+/** Writing the settings. The agent reads them on every send, so they apply at once. */
 export async function PATCH(request: Request) {
   const parsed = SettingsSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) {
-    return NextResponse.json({ error: "Nieprawidłowe ustawienia" }, { status: 400 });
+    return NextResponse.json({ error: "Invalid settings" }, { status: 400 });
   }
 
   const { endpoint, minRelevance, topics } = parsed.data;
-  // Pusta lista znaczyłaby "nic mnie nie interesuje" — traktujemy ją jak brak
-  // filtra, bo to prawie na pewno pomyłka, a nie świadomy wybór.
+  // An empty list would mean "nothing interests me" — we treat it as no filter,
+  // because it is almost certainly a mistake rather than a deliberate choice.
   const normalized = topics && topics.length > 0 ? topics : null;
 
   const rows = (await sql()`
@@ -61,7 +62,7 @@ export async function PATCH(request: Request) {
 
   const row = rows[0];
   if (!row) {
-    return NextResponse.json({ error: "Nie znaleziono subskrypcji" }, { status: 404 });
+    return NextResponse.json({ error: "Subscription not found" }, { status: 404 });
   }
 
   return NextResponse.json({ minRelevance: row.min_relevance, topics: row.topics });

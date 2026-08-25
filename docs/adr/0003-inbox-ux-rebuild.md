@@ -79,7 +79,7 @@ pięć list po dwa-trzy, gubiąc wrażenie świeżości. Tematy zostają jako za
 widoku, przy okazji nadając sens chipom, które i tak już są w hero. Nad
 wszystkim trzy zakładki: **Nowe / Przeczytane / Wszystkie**.
 
-Stan filtra i zakładki idzie do **URL** (`?widok=nowe&temat=ai`), nie do stanu
+Stan filtra i zakładki idzie do **URL** (`?view=new&topic=ai`), nie do stanu
 komponentu — dzięki temu działa przycisk wstecz, odświeżenie nie gubi kontekstu
 i da się wysłać sobie link na drugie urządzenie.
 

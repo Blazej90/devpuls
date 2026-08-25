@@ -14,9 +14,9 @@ const packageRoot = path.resolve(
 const SQL_DIR = path.join(packageRoot, "sql");
 
 /**
- * Endpoint HTTP Neona przyjmuje jedno zapytanie na wywołanie, więc plik
- * rozbijamy na osobne instrukcje. Działa, bo migracje to czysty DDL — gdyby
- * kiedyś pojawiła się funkcja w bloku $$ ... $$, ten split trzeba przepisać.
+ * The Neon HTTP endpoint takes one query per call, so we split the file into
+ * separate statements. That works because migrations are plain DDL — should a
+ * function in a $$ ... $$ block ever appear, this split has to be rewritten.
  */
 function splitStatements(sql: string): string[] {
   return sql
@@ -34,7 +34,7 @@ function splitStatements(sql: string): string[] {
 async function main(): Promise<void> {
   const sql = neon(requireEnv("DATABASE_URL"));
 
-  // Rejestr migracji musi istnieć, zanim sprawdzimy, co już poszło.
+  // The migration registry has to exist before we check what has already run.
   await sql`
     CREATE TABLE IF NOT EXISTS schema_migrations (
       version    TEXT PRIMARY KEY,
@@ -53,7 +53,7 @@ async function main(): Promise<void> {
     .sort();
 
   if (files.length === 0) {
-    console.log("Brak plików migracji w", SQL_DIR);
+    console.log("No migration files in", SQL_DIR);
     return;
   }
 
@@ -63,15 +63,15 @@ async function main(): Promise<void> {
     const version = file.replace(/\.sql$/, "");
 
     if (applied.has(version)) {
-      console.log(`- ${version} — już zastosowana, pomijam`);
+      console.log(`- ${version} — already applied, skipping`);
       continue;
     }
 
     const statements = splitStatements(await readFile(path.join(SQL_DIR, file), "utf8"));
-    console.log(`> ${version} — ${statements.length} instrukcji`);
+    console.log(`> ${version} — ${statements.length} statements`);
 
-    // Cała migracja idzie jedną transakcją: albo przejdzie w całości,
-    // albo baza zostaje w stanie sprzed niej.
+    // The whole migration runs in one transaction: either it goes through
+    // completely, or the database stays as it was before it.
     await sql.transaction([
       ...statements.map((statement) => sql.query(statement)),
       sql.query("INSERT INTO schema_migrations (version) VALUES ($1)", [version]),
@@ -83,12 +83,12 @@ async function main(): Promise<void> {
 
   console.log(
     appliedNow === 0
-      ? "Baza jest aktualna — nic do zrobienia."
-      : `Zastosowano ${appliedNow} migracji.`,
+      ? "The database is up to date — nothing to do."
+      : `Applied ${appliedNow} migration(s).`,
   );
 }
 
 main().catch((error: unknown) => {
-  console.error("Migracja nieudana:", error);
+  console.error("Migration failed:", error);
   process.exitCode = 1;
 });

@@ -17,19 +17,19 @@ export const metadata: Metadata = {
     "Nowinki z TypeScript, Reacta, JS, fullstacku i AI — przefiltrowane pod kątem trafności i streszczone po polsku.",
   applicationName: "DevPuls",
   manifest: "/manifest.json",
-  // Oba wpisy jawnie: zadeklarowanie `icons` wyłącza konwencję plikową Next.js,
-  // więc samo `app/icon.svg` nie wystarczy — sprawdzone, link do faviconu
-  // wtedy w ogóle nie trafia do <head>.
+  // Both entries explicitly: declaring `icons` disables the Next.js file
+  // convention, so `app/icon.svg` alone is not enough — verified, the favicon
+  // link then never reaches <head> at all.
   //
-  // SVG dla przeglądarki (jeden plik, każdy rozmiar), PNG dla Safari:
-  // `apple-touch-icon` **nie przyjmuje SVG**, a iOS to platforma, na której
-  // appka jest faktycznie zainstalowana.
+  // SVG for the browser (one file, every size), PNG for Safari:
+  // `apple-touch-icon` **does not accept SVG**, and iOS is the platform where
+  // the app is actually installed.
   icons: {
     icon: [{ url: "/icon.svg", type: "image/svg+xml" }],
     apple: "/apple-touch-icon.png",
   },
-  // Wymagane, żeby iOS traktował stronę dodaną do ekranu głównego jak appkę
-  // — bez tego Web Push na Safari nie zadziała (ADR-0001).
+  // Required for iOS to treat a page added to the home screen as an app —
+  // without it Web Push does not work on Safari (ADR-0001).
   appleWebApp: {
     capable: true,
     title: "DevPuls",
@@ -38,14 +38,15 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  // Pasek przeglądarki podąża za preferencją systemu. To nie to samo co
-  // `theme_color` w manifeście, który maluje splash **przed** wczytaniem strony
-  // i jako statyczny JSON nie umie reagować na motyw — patrz komentarz tam.
+  // The browser chrome follows the system preference. This is not the same as
+  // `theme_color` in the manifest, which paints the splash screen **before** the
+  // page loads and, being static JSON, cannot react to the theme — see the
+  // comment there.
   themeColor: [
     { media: "(prefers-color-scheme: light)", color: "#ffffff" },
     { media: "(prefers-color-scheme: dark)", color: "#0a0a0a" },
   ],
-  // Appka na ekranie głównym ma sięgać pod notch.
+  // An app on the home screen should reach under the notch.
   viewportFit: "cover",
 };
 
@@ -55,14 +56,14 @@ export default function RootLayout({
   return (
     <html lang="pl" suppressHydrationWarning>
       <body className="min-h-dvh antialiased">
-        {/* Przed hydratacją — inaczej przegapimy beforeinstallprompt. */}
+        {/* Before hydration — otherwise we miss beforeinstallprompt. */}
         <Script id="devpuls-install-prompt" strategy="beforeInteractive">
           {INSTALL_PROMPT_BOOTSTRAP}
         </Script>
         <ThemeProvider>
           {children}
-          {/* Toasty niosą akcję "Cofnij" po usunięciu wpisu (ADR-0003),
-              więc muszą siedzieć wewnątrz providera — sonner czyta z niego motyw. */}
+          {/* Toasts carry the undo action after deleting an item (ADR-0003), so
+              they have to sit inside the provider — sonner reads the theme from it. */}
           <Toaster position="bottom-center" />
         </ThemeProvider>
         <ServiceWorkerRegistrar />

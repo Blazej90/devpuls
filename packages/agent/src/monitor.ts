@@ -1,27 +1,27 @@
 import { appendFile } from "node:fs/promises";
 
 /**
- * Zbieranie zdrowia jednego przebiegu (Faza 8).
+ * Collecting the health of a single run (Phase 8).
  *
- * Kolektor jest modułowy (stan na poziomie modułu), a nie przekazywany
- * parametrem, świadomie: agent to skrypt jednorazowy — jeden proces = jeden
- * przebieg — a przewlekanie obiektu raportu przez `claude.ts`, `push.ts`
- * i fetchery zmieniłoby ich sygnatury tylko po to, żeby dowieźć logowanie.
- * Gdyby agent kiedyś obsługiwał wiele przebiegów naraz, to trzeba przepisać.
+ * The collector is module-scoped (state at module level) rather than passed as
+ * a parameter, deliberately: the agent is a one-shot script — one process = one
+ * run — and threading a report object through `claude.ts`, `push.ts` and the
+ * fetchers would change their signatures only to deliver logging. Should the
+ * agent ever handle several runs at once, this has to be rewritten.
  */
 
 /**
- * `source`  — źródło nie odpowiedziało / rzuciło wyjątkiem
- * `empty`   — źródło odpowiedziało 200, ale zwróciło zero wpisów (patrz niżej)
- * `claude`  — odmowa albo pusta odpowiedź modelu dla konkretnego wpisu
- * `push`    — błąd wysyłki inny niż wygaśnięcie subskrypcji (404/410)
- * `fatal`   — wyjątek, który przerwał cały przebieg
+ * `source`  — the source did not respond / threw
+ * `empty`   — the source responded 200 but returned zero items (see below)
+ * `claude`  — a refusal or an empty model response for a specific item
+ * `push`    — a delivery error other than an expired subscription (404/410)
+ * `fatal`   — an exception that aborted the whole run
  */
 export type ErrorKind = "source" | "empty" | "claude" | "push" | "fatal";
 
 export interface RunError {
   kind: ErrorKind;
-  /** Czego dotyczy: id źródła, URL wpisu, host push service. */
+  /** What it refers to: a source id, an item URL, a push service host. */
   ref: string;
   message: string;
 }
@@ -41,7 +41,7 @@ export interface RunReport {
   errors: RunError[];
 }
 
-/** Powyżej tego JSONB przestaje być czytelny, a i tak nic nie wnosi. */
+/** Beyond this the JSONB stops being readable and adds nothing anyway. */
 const MAX_ERRORS = 50;
 const MAX_MESSAGE_CHARS = 300;
 
@@ -68,7 +68,7 @@ export function startRun(): void {
 
 function toMessage(error: unknown): string {
   const raw =
-    error instanceof Error ? error.message : String(error ?? "brak szczegółów");
+    error instanceof Error ? error.message : String(error ?? "no details");
   return raw.length > MAX_MESSAGE_CHARS
     ? `${raw.slice(0, MAX_MESSAGE_CHARS)}…`
     : raw;
@@ -88,16 +88,15 @@ export function set(key: keyof typeof counters, value: number): void {
 }
 
 /**
- * Awaria vs. zadrapanie.
+ * A failure versus a scratch.
  *
- * `failed` rezerwujemy dla sytuacji, w której przebieg nie mógł zrobić swojego:
- * wyjątek na zewnątrz albo zero działających źródeł. Padnięcie jednego feedu
- * to `degraded` — przebieg dowiózł resztę i nie ma powodu, żeby czerwienić
- * cały workflow.
+ * `failed` is reserved for a run that could not do its job: an exception
+ * escaping, or zero working sources. One feed going down is `degraded` — the
+ * run delivered the rest and there is no reason to turn the whole workflow red.
  *
- * `fresh > 0 && assessed === 0` też jest awarią: były nowe wpisy, a żaden nie
- * przeszedł przez model. To wygląda na wyczerpany limit API albo zły klucz,
- * a nie na dzień bez nowinek.
+ * `fresh > 0 && assessed === 0` is a failure too: there were new items and none
+ * of them made it through the model. That looks like an exhausted API quota or
+ * a bad key, not like a day without news.
  */
 export function currentStatus(): RunStatus {
   if (errors.some((error) => error.kind === "fatal")) return "failed";
@@ -116,38 +115,38 @@ export function buildReport(): RunReport {
   };
 }
 
-const ETYKIETY: Record<RunStatus, string> = {
+const STATUS_LABELS: Record<RunStatus, string> = {
   ok: "OK",
   degraded: "Z zastrzeżeniami",
   failed: "Nieudany",
 };
 
 /**
- * Adnotacje i podsumowanie w GitHub Actions.
+ * Annotations and the summary in GitHub Actions.
  *
- * `::warning::` zamiast czerwonego builda dla `degraded` — inaczej jeden feed
- * z chwilowym 429 gasiłby cały workflow i po tygodniu czerwone przestałoby
- * cokolwiek znaczyć. Twarda awaria idzie jako `::error::` i wywraca run,
- * więc GitHub wysyła maila.
+ * `::warning::` instead of a red build for `degraded` — otherwise one feed with
+ * a transient 429 would kill the whole workflow and after a week red would stop
+ * meaning anything. A hard failure goes out as `::error::` and fails the run,
+ * so GitHub sends an email.
  */
 export async function publishToActions(report: RunReport): Promise<void> {
   if (!process.env.GITHUB_ACTIONS) return;
 
   for (const error of report.errors) {
-    const poziom = error.kind === "fatal" ? "error" : "warning";
-    // Znaki nowej linii łamią format adnotacji — muszą iść jako %0A.
-    const tresc = `[${error.kind}] ${error.ref}: ${error.message}`.replace(
+    const level = error.kind === "fatal" ? "error" : "warning";
+    // Newlines break the annotation format — they have to go as %0A.
+    const text = `[${error.kind}] ${error.ref}: ${error.message}`.replace(
       /\r?\n/g,
       "%0A",
     );
-    console.log(`::${poziom}::${tresc}`);
+    console.log(`::${level}::${text}`);
   }
 
   const summaryPath = process.env.GITHUB_STEP_SUMMARY;
   if (!summaryPath) return;
 
-  const wiersze = [
-    `## DevPuls — przebieg: ${ETYKIETY[report.status]}`,
+  const lines = [
+    `## DevPuls — przebieg: ${STATUS_LABELS[report.status]}`,
     "",
     "| Metryka | Wartość |",
     "| --- | ---: |",
@@ -162,12 +161,12 @@ export async function publishToActions(report: RunReport): Promise<void> {
   ];
 
   if (report.errors.length > 0) {
-    wiersze.push(`### Zastrzeżenia (${report.errors.length})`, "");
+    lines.push(`### Zastrzeżenia (${report.errors.length})`, "");
     for (const error of report.errors) {
-      wiersze.push(`- \`${error.kind}\` **${error.ref}** — ${error.message}`);
+      lines.push(`- \`${error.kind}\` **${error.ref}** — ${error.message}`);
     }
-    wiersze.push("");
+    lines.push("");
   }
 
-  await appendFile(summaryPath, wiersze.join("\n"), "utf8");
+  await appendFile(summaryPath, lines.join("\n"), "utf8");
 }

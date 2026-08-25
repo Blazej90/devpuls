@@ -25,19 +25,20 @@ import type {
 } from "@/types.js";
 
 /**
- * Orkiestracja jednego przebiegu:
- * config → pobranie źródeł → deduplikacja po URL → ocena przez Claude
- * → zapis do bazy → jeden digest push na przebieg (ADR-0002).
+ * Orchestration of a single run:
+ * config → fetch sources → deduplicate by URL → assess with Claude
+ * → store in the database → one push digest per run (ADR-0002).
  *
- * Uruchamiany jako jednorazowy skrypt z `.github/workflows/ingest.yml`.
- * Zdrowie przebiegu zbiera `monitor.ts` i zapisuje `saveRun` (Faza 8).
+ * Executed as a one-shot script from `.github/workflows/ingest.yml`.
+ * Run health is collected by `monitor.ts` and stored by `saveRun` (Phase 8).
  */
 async function run(): Promise<void> {
   const sources = await loadSources();
   await syncSources(sources);
 
-  // Źródła z tego samego hosta lecą po kolei, różne hosty równolegle.
-  // Reddit odbija 429, gdy trzy jego feedy uderzą jednocześnie z tego samego IP.
+  // Sources from the same host go one after another, different hosts in
+  // parallel. Reddit returns 429 when three of its feeds hit at once from the
+  // same IP.
   const byHost = new Map<string, SourceConfig[]>();
   for (const source of sources) {
     const host = new URL(source.url).hostname;
@@ -46,7 +47,7 @@ async function run(): Promise<void> {
     else byHost.set(host, [source]);
   }
 
-  // Jedno źródło, które padnie, nie może zabrać ze sobą pozostałych.
+  // One source going down must not take the others with it.
   const grouped = await Promise.all(
     [...byHost.values()].map(async (group) => {
       const results: { source: SourceConfig; items: NormalizedItem[] | null }[] = [];
@@ -54,7 +55,7 @@ async function run(): Promise<void> {
         try {
           results.push({ source, items: await fetchSource(source) });
         } catch (error: unknown) {
-          console.error(`[${source.id}] pobieranie nieudane:`, error);
+          console.error(`[${source.id}] fetch failed:`, error);
           noteError("source", source.id, error);
           results.push({ source, items: null });
         }
@@ -71,15 +72,16 @@ async function run(): Promise<void> {
       continue;
     }
 
-    console.log(`[${source.id}] pobrano ${items.length} wpisów`);
+    console.log(`[${source.id}] fetched ${items.length} items`);
     count("sourcesOk");
     candidates.push(...items);
 
-    // Feed, który odpowiada 200 i zwraca pustą listę, to najcichszy tryb
-    // awarii — tak przez tydzień milczały trzy feedy Reddita, zanim okazało
-    // się, że `.rss` serwuje Atoma. Zdrowe źródło zawsze ma jakieś wpisy.
+    // A feed that answers 200 and returns an empty list is the quietest failure
+    // mode there is — that is how three Reddit feeds stayed silent for a week
+    // before it turned out `.rss` serves Atom. A healthy source always has some
+    // items.
     if (items.length === 0) {
-      noteError("empty", source.id, "HTTP OK, ale zero wpisów — sprawdź parser");
+      noteError("empty", source.id, "HTTP OK but zero items — check the parser");
     }
   }
 
@@ -90,43 +92,43 @@ async function run(): Promise<void> {
   set("fresh", fresh.length);
 
   console.log(
-    `Kandydatów: ${candidates.length}, nowych po deduplikacji: ${fresh.length}`,
+    `Candidates: ${candidates.length}, new after deduplication: ${fresh.length}`,
   );
 
-  const oceniona: { id: number; item: AssessedItem }[] = [];
+  const assessed: { id: number; item: AssessedItem }[] = [];
 
-  // Sekwencyjnie — kilkanaście wpisów na przebieg nie potrzebuje
-  // zrównoleglenia, a tak nie wpadamy w rate limity API.
+  // Sequentially — a dozen or so items per run does not need parallelism, and
+  // this way we stay clear of API rate limits.
   for (const item of fresh) {
     let assessment: Assessment | null;
     try {
       assessment = await assessItem(item);
     } catch (error: unknown) {
-      console.error(`[claude] ocena nieudana: ${item.url}`, error);
+      console.error(`[claude] assessment failed: ${item.url}`, error);
       noteError("claude", item.url, error);
       continue;
     }
     if (!assessment) continue;
 
-    const assessed: AssessedItem = { ...item, assessment };
-    const itemId = await insertItem(assessed);
+    const withAssessment: AssessedItem = { ...item, assessment };
+    const itemId = await insertItem(withAssessment);
     if (itemId === null) continue;
 
-    oceniona.push({ id: itemId, item: assessed });
+    assessed.push({ id: itemId, item: withAssessment });
   }
 
-  set("assessed", oceniona.length);
+  set("assessed", assessed.length);
 
-  // Jedno powiadomienie zbiorcze na cały przebieg, nie jedno na wpis (ADR-0002).
-  // Filtrowanie po progu i kategoriach robi `sendDigest` osobno dla każdej
-  // subskrypcji, więc tutaj podajemy komplet.
-  const delivered = await sendDigest(oceniona.map((wpis) => wpis.item));
+  // One combined notification for the whole run, not one per item (ADR-0002).
+  // Filtering by threshold and categories happens inside `sendDigest`,
+  // separately for each subscription, so here we pass the full set.
+  const delivered = await sendDigest(assessed.map((entry) => entry.item));
   set("delivered", delivered);
 
-  // `notified_at` oznaczamy dopiero, gdy digest faktycznie poszedł — inaczej
-  // wpisy wyglądałyby na zapowiedziane, mimo że nikt się o nich nie dowiedział.
+  // `notified_at` is set only once the digest actually went out — otherwise
+  // items would look announced even though nobody ever heard about them.
   if (delivered > 0) {
-    await markNotified(oceniona.map((wpis) => wpis.id));
+    await markNotified(assessed.map((entry) => entry.id));
   }
 }
 
@@ -136,9 +138,9 @@ async function main(): Promise<void> {
   try {
     await run();
   } catch (error: unknown) {
-    // Wyjątek nie kończy procesu od razu: chcemy jeszcze zapisać, że przebieg
-    // padł, i zostawić adnotację w GitHub Actions.
-    console.error("Pipeline przerwany:", error);
+    // An exception does not end the process straight away: we still want to
+    // record that the run failed and leave an annotation in GitHub Actions.
+    console.error("Pipeline aborted:", error);
     noteError("fatal", "pipeline", error);
   }
 
@@ -148,14 +150,14 @@ async function main(): Promise<void> {
   await publishToActions(report);
 
   console.log(
-    `Gotowe w ${Math.round(report.durationMs / 1000)}s — status ${report.status}, ` +
-      `źródła ${report.sourcesOk} OK / ${report.sourcesFailed} nieudane, ` +
-      `ocenionych ${report.assessed}, digestów wysłanych ${report.delivered}, ` +
-      `zastrzeżeń ${report.errors.length}`,
+    `Done in ${Math.round(report.durationMs / 1000)}s — status ${report.status}, ` +
+      `sources ${report.sourcesOk} OK / ${report.sourcesFailed} failed, ` +
+      `assessed ${report.assessed}, digests delivered ${report.delivered}, ` +
+      `warnings ${report.errors.length}`,
   );
 
-  // Czerwony workflow (i mail od GitHuba) tylko przy twardej awarii.
-  // `degraded` widać w adnotacjach, podsumowaniu kroku i w samej appce.
+  // A red workflow (and an email from GitHub) only on a hard failure.
+  // `degraded` shows up in the annotations, the step summary and the app itself.
   if (report.status === "failed") {
     process.exitCode = 1;
   }

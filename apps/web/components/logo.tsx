@@ -1,20 +1,21 @@
 import { cn } from "@/lib/utils";
 
 /**
- * Znak DevPulsa — linia pulsu (ADR-0003, Etap 4).
+ * The DevPuls mark — a pulse line (ADR-0003, Stage 4).
  *
- * Rysowany `stroke`, nie `fill`, i w `currentColor`: dzięki temu ten sam plik
- * obsługuje hero, motyw jasny i ciemny bez drugiej wersji. Wariant z tłem
- * (ikona PWA) siedzi osobno w `public/logo.svg`, bo tam kolory muszą być
- * wpisane na sztywno — system operacyjny nie zna naszych tokenów.
+ * Drawn with `stroke`, not `fill`, and in `currentColor`: that way one file
+ * serves the hero, the light theme and the dark theme without a second
+ * version. The variant with a background (the PWA icon) lives separately in
+ * `public/logo.svg`, because there the colours have to be hard-coded — the
+ * operating system does not know our tokens.
  *
- * Ścieżka: płaska linia bazowa, mniejszy wierzchołek, głębokie zejście,
- * najwyższy wierzchołek, powrót do bazy. Ta sama sylwetka co w ikonie
- * zastępczej, tylko narysowana w wektorze zamiast w powiększonym bitmapie.
+ * The path: a flat baseline, a smaller peak, a deep dip, the tallest peak, back
+ * to the baseline. The same silhouette as the placeholder icon, only drawn as
+ * a vector instead of an upscaled bitmap.
  */
-export const SCIEZKA_PULSU = "M3 24H13L18 13L24 35L30 9L35 24H45";
+export const PULSE_PATH = "M3 24H13L18 13L24 35L30 9L35 24H45";
 
-export function Znak({ className }: { className?: string }) {
+export function Mark({ className }: { className?: string }) {
   return (
     <svg
       viewBox="0 0 48 48"
@@ -24,7 +25,7 @@ export function Znak({ className }: { className?: string }) {
       className={cn("size-8", className)}
     >
       <path
-        d={SCIEZKA_PULSU}
+        d={PULSE_PATH}
         stroke="currentColor"
         strokeWidth={4}
         strokeLinecap="round"
@@ -35,13 +36,13 @@ export function Znak({ className }: { className?: string }) {
 }
 
 /**
- * Znak plus nazwa. Wordmark jest **tekstem**, nie krzywymi — czyta go
- * czytnik ekranu, skaluje się z ustawieniami systemowymi i nie waży nic.
+ * The mark plus the name. The wordmark is **text**, not outlines — a screen
+ * reader reads it, it scales with system settings and it weighs nothing.
  */
 export function Logo({ className }: { className?: string }) {
   return (
     <span className={cn("inline-flex items-center gap-2.5", className)}>
-      <Znak className="text-brand size-9 shrink-0" />
+      <Mark className="text-brand size-9 shrink-0" />
       <span className="text-4xl font-semibold tracking-tight">DevPuls</span>
     </span>
   );

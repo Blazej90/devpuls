@@ -13,12 +13,12 @@ import {
 } from "@/components/ui/card";
 
 /**
- * `applicationServerKey` musi być bajtami, a klucz VAPID przychodzi jako
- * base64url. Konwersja jest wymagana przez PushManager.
+ * `applicationServerKey` has to be bytes, while the VAPID key arrives as
+ * base64url. PushManager requires the conversion.
  */
-// Zwracany typ jest zawężony do Uint8Array<ArrayBuffer>: PushManager wymaga
-// BufferSource opartego o ArrayBuffer, a goły `new Uint8Array(n)` ma szerszy
-// ArrayBufferLike i nie przechodzi kontroli typów.
+// The return type is narrowed to Uint8Array<ArrayBuffer>: PushManager needs a
+// BufferSource backed by an ArrayBuffer, and a bare `new Uint8Array(n)` has the
+// wider ArrayBufferLike and fails type checking.
 function urlBase64ToUint8Array(base64: string): Uint8Array<ArrayBuffer> {
   const padding = "=".repeat((4 - (base64.length % 4)) % 4);
   const normalized = (base64 + padding).replace(/-/g, "+").replace(/_/g, "/");
@@ -28,52 +28,46 @@ function urlBase64ToUint8Array(base64: string): Uint8Array<ArrayBuffer> {
   return output;
 }
 
-type Status =
-  | "sprawdzanie"
-  | "niewspierane"
-  | "zablokowane"
-  | "wylaczone"
-  | "wlaczone"
-  | "pracuje";
+type Status = "checking" | "unsupported" | "blocked" | "off" | "on" | "working";
 
 const VAPID_PUBLIC_KEY = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ?? "";
 
 export function PushToggle() {
-  const [status, setStatus] = useState<Status>("sprawdzanie");
-  const [blad, setBlad] = useState<string | null>(null);
+  const [status, setStatus] = useState<Status>("checking");
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    let anulowane = false;
+    let cancelled = false;
 
-    const sprawdz = async () => {
+    const check = async () => {
       if (
         !("serviceWorker" in navigator) ||
         !("PushManager" in window) ||
         !("Notification" in window)
       ) {
-        if (!anulowane) setStatus("niewspierane");
+        if (!cancelled) setStatus("unsupported");
         return;
       }
 
       if (Notification.permission === "denied") {
-        if (!anulowane) setStatus("zablokowane");
+        if (!cancelled) setStatus("blocked");
         return;
       }
 
       const registration = await navigator.serviceWorker.ready;
       const subscription = await registration.pushManager.getSubscription();
-      if (!anulowane) setStatus(subscription ? "wlaczone" : "wylaczone");
+      if (!cancelled) setStatus(subscription ? "on" : "off");
     };
 
-    void sprawdz();
+    void check();
     return () => {
-      anulowane = true;
+      cancelled = true;
     };
   }, []);
 
-  const wlacz = useCallback(async () => {
-    setBlad(null);
-    setStatus("pracuje");
+  const enable = useCallback(async () => {
+    setError(null);
+    setStatus("working");
 
     try {
       if (!VAPID_PUBLIC_KEY) {
@@ -82,13 +76,13 @@ export function PushToggle() {
 
       const permission = await Notification.requestPermission();
       if (permission !== "granted") {
-        setStatus(permission === "denied" ? "zablokowane" : "wylaczone");
+        setStatus(permission === "denied" ? "blocked" : "off");
         return;
       }
 
       const registration = await navigator.serviceWorker.ready;
       const subscription = await registration.pushManager.subscribe({
-        // Wymagane przez Chrome — powiadomienia zawsze widoczne dla użytkownika.
+        // Required by Chrome — notifications must always be visible to the user.
         userVisibleOnly: true,
         applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
       });
@@ -100,22 +94,22 @@ export function PushToggle() {
       });
 
       if (!response.ok) {
-        // Nie zostawiamy subskrypcji w przeglądarce, skoro serwer jej nie zna.
+        // We do not leave a subscription in the browser the server knows nothing about.
         await subscription.unsubscribe();
         throw new Error(`Serwer odrzucił subskrypcję (HTTP ${response.status})`);
       }
 
-      setStatus("wlaczone");
-    } catch (error: unknown) {
-      console.error("[push] włączenie nieudane", error);
-      setBlad(error instanceof Error ? error.message : "Nieznany błąd");
-      setStatus("wylaczone");
+      setStatus("on");
+    } catch (cause: unknown) {
+      console.error("[push] enabling failed", cause);
+      setError(cause instanceof Error ? cause.message : "Nieznany błąd");
+      setStatus("off");
     }
   }, []);
 
-  const wylacz = useCallback(async () => {
-    setBlad(null);
-    setStatus("pracuje");
+  const disable = useCallback(async () => {
+    setError(null);
+    setStatus("working");
 
     try {
       const registration = await navigator.serviceWorker.ready;
@@ -130,56 +124,55 @@ export function PushToggle() {
         await subscription.unsubscribe();
       }
 
-      setStatus("wylaczone");
-    } catch (error: unknown) {
-      console.error("[push] wyłączenie nieudane", error);
-      setBlad(error instanceof Error ? error.message : "Nieznany błąd");
-      setStatus("wlaczone");
+      setStatus("off");
+    } catch (cause: unknown) {
+      console.error("[push] disabling failed", cause);
+      setError(cause instanceof Error ? cause.message : "Nieznany błąd");
+      setStatus("on");
     }
   }, []);
 
-  if (status === "sprawdzanie") return null;
+  if (status === "checking") return null;
 
-  const opis: Record<Exclude<Status, "sprawdzanie">, string> = {
-    niewspierane:
+  const descriptions: Record<Exclude<Status, "checking">, string> = {
+    unsupported:
       "Ta przeglądarka nie obsługuje Web Push. Na iPhonie dodaj DevPuls do ekranu głównego.",
-    zablokowane:
+    blocked:
       "Powiadomienia są zablokowane w ustawieniach przeglądarki dla tej strony — trzeba je odblokować ręcznie.",
-    wylaczone:
-      "Dostaniesz powiadomienie o każdym nowym wpisie powyżej progu trafności, z linkiem do oryginału.",
-    wlaczone: "Powiadomienia są włączone. Nowe wpisy przyjdą automatycznie.",
-    pracuje: "Chwileczkę…",
+    off: "Dostaniesz powiadomienie o każdym nowym wpisie powyżej progu trafności, z linkiem do oryginału.",
+    on: "Powiadomienia są włączone. Nowe wpisy przyjdą automatycznie.",
+    working: "Chwileczkę…",
   };
 
   return (
     <Card>
       <CardHeader>
         <CardTitle>Powiadomienia</CardTitle>
-        <CardDescription>{opis[status]}</CardDescription>
+        <CardDescription>{descriptions[status]}</CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
-        {status === "wylaczone" && (
-          <Button onClick={() => void wlacz()}>
+        {status === "off" && (
+          <Button onClick={() => void enable()}>
             <BellRing className="size-4" aria-hidden />
             Włącz powiadomienia
           </Button>
         )}
 
-        {status === "wlaczone" && (
-          <Button variant="secondary" onClick={() => void wylacz()}>
+        {status === "on" && (
+          <Button variant="secondary" onClick={() => void disable()}>
             <BellOff className="size-4" aria-hidden />
             Wyłącz powiadomienia
           </Button>
         )}
 
-        {status === "pracuje" && (
+        {status === "working" && (
           <Button disabled>
             <Loader2 className="size-4 animate-spin" aria-hidden />
             Pracuję…
           </Button>
         )}
 
-        {blad && <p className="text-destructive text-sm">{blad}</p>}
+        {error && <p className="text-destructive text-sm">{error}</p>}
       </CardContent>
     </Card>
   );

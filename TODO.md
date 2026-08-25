@@ -66,9 +66,9 @@ Agent aktualizuje ten plik na bieżąco, ale nigdy go nie commituje bez zgody
 - [x] Migracja 005: `items.deleted_at`, indeksy `items_unread_idx` i `items_recency_idx`
       pod `COALESCE(published_at, created_at) DESC` z warunkiem `deleted_at IS NULL`
 - [x] `lib/items.ts`: sortowanie po dacie publikacji, filtr `deleted_at IS NULL`,
-      `listItems` / `liczniki` pod zakładki i filtr tematu, zapisy (`markRead`,
+      `listItems` / `counts` pod zakładki i filtr tematu, zapisy (`markRead`,
       `markAllRead`, `softDelete`, `restore`) w tym samym module
-- [x] `POST /api/items/delete` — miękkie usuwanie `{ids}` + cofnięcie `{przywroc:true}`
+- [x] `POST /api/items/delete` — miękkie usuwanie `{ids}` + cofnięcie `{restore:true}`
 - [x] `POST /api/items/read` — `{ids}` obsługuje grupę i zaznaczenie wielu;
       `{all:true}` zawężone opcjonalnym `temat`
 - [x] Normalizacja TIMESTAMPTZ do ISO — sterownik Neona zwraca `Date`, nie string
@@ -85,13 +85,13 @@ Agent aktualizuje ten plik na bieżąco, ale nigdy go nie commituje bez zgody
 - [x] Kolor splash-a przeniesiony na barwę marki w Etapie 4 — patrz niżej
 
 ### Etap 3 — skrzynka
-- [x] Zakładki Nowe / Przeczytane / Wszystkie z licznikami, stan w URL (`?widok=`).
+- [x] Zakładki Nowe / Przeczytane / Wszystkie z licznikami, stan w URL (`?view=`).
       Zwykłe linki, nie shadcn `tabs` — każda zakładka to inne zapytanie do bazy,
       a Radix przełącza panele po stronie klienta
-- [x] Chipy tematów jako działający filtr, stan w URL (`?temat=`); zakładka i filtr
+- [x] Chipy tematów jako działający filtr, stan w URL (`?topic=`); zakładka i filtr
       wzajemnie się zachowują
 - [x] Grupowanie po dacie: Dziś / Wczoraj / W tym tygodniu / Starsze —
-      `lib/grupowanie.ts`, strefa przypięta do Europe/Warsaw
+      `lib/date-groups.ts`, strefa przypięta do Europe/Warsaw
 - [x] Karta: `outline` zamiast `ghost` przy „Przeczytane”; **otwarcie linku już nie
       oznacza wpisu**
 - [x] „Oznacz grupę” przy nagłówku sekcji, widoczne tylko gdy grupa ma nieodhaczone
@@ -114,10 +114,10 @@ Agent aktualizuje ten plik na bieżąco, ale nigdy go nie commituje bez zgody
       przy renderze, więc nota nie zestarzeje się 1 stycznia
 
 ### Etap 5 — dopracowanie skrzynki
-- [x] „O aplikacji” jako podstrona `/o-aplikacji` + link w nagłówku. Jako karta na
+- [x] „O aplikacji” jako podstrona `/about` + link w nagłówku. Jako karta na
       dole listy wyglądała identycznie jak wpis i im więcej appka miała treści,
       tym trudniej było do niej dotrzeć
-- [x] Przycisk „na górę” przy długim przewijaniu — `components/do-gory.tsx`,
+- [x] Przycisk „na górę” przy długim przewijaniu — `components/scroll-to-top.tsx`,
       `useSyncExternalStore` na pozycji przewinięcia, respektuje `prefers-reduced-motion`
 - [x] Odznaczanie z powrotem jako nieprzeczytane — do tej pory stan był
       jednokierunkowy i pomyłkę dało się cofnąć tylko przez bazę
@@ -133,7 +133,7 @@ Agent aktualizuje ten plik na bieżąco, ale nigdy go nie commituje bez zgody
       (ADR-0003)
 
 ### Dług
-- [x] Paginacja skrzynki — 30 wpisów na stronę, `?strona=` w URL-u.
+- [x] Paginacja skrzynki — 30 wpisów na stronę, `?page=` w URL-u.
       Klasyczne strony przez OFFSET, nie doładowywanie rosnącym limitem:
       archiwum rośnie bez górnej granicy, a tak rozmiar odpowiedzi zostaje stały
       niezależnie od tego, jak głęboko sięgamy. Zmiana zakładki albo kategorii

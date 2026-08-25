@@ -1,23 +1,24 @@
--- Migracja 002 — tematy wpisów i ustawienia per subskrypcja.
+-- Migration 002 — item topics and per-subscription settings.
 --
--- Do tej pory `claude.ts` zwracał listę tematów, ale nigdzie jej nie zapisywaliśmy.
--- Bez tego nie da się filtrować listy w UI ani wysyłać pushy tylko z wybranych
--- kategorii. Ustawienia trzymamy przy subskrypcji, a nie w ENV agenta, żeby próg
--- dało się zmienić z poziomu appki bez redeployu.
+-- Until now `claude.ts` returned a list of topics but we stored it nowhere.
+-- Without it there is no way to filter the list in the UI or to push only
+-- selected categories. The settings live with the subscription rather than in
+-- the agent's ENV so the threshold can be changed from the app without a
+-- redeploy.
 
 ALTER TABLE items
   ADD COLUMN IF NOT EXISTS topics TEXT[];
 
--- Filtrowanie listy po kategorii.
+-- Filtering the list by category.
 CREATE INDEX IF NOT EXISTS items_topics_idx ON items USING GIN (topics);
 
--- Próg trafności per subskrypcja. Domyślne 4 zgodne z dotychczasowym
--- RELEVANCE_THRESHOLD, żeby istniejące subskrypcje nic nie straciły.
+-- Relevance threshold per subscription. The default of 4 matches the previous
+-- RELEVANCE_THRESHOLD so existing subscriptions lose nothing.
 ALTER TABLE push_subscriptions
   ADD COLUMN IF NOT EXISTS min_relevance SMALLINT NOT NULL DEFAULT 4;
 
--- Postgres nie zna ADD CONSTRAINT IF NOT EXISTS, a nie chcemy tu bloku $$ —
--- rozbijarka instrukcji w migrate.ts obsluguje wylacznie plaski DDL.
+-- Postgres has no ADD CONSTRAINT IF NOT EXISTS, and we do not want a $$ block
+-- here — the statement splitter in migrate.ts only handles flat DDL.
 ALTER TABLE push_subscriptions
   DROP CONSTRAINT IF EXISTS push_subscriptions_min_relevance_check;
 
@@ -25,6 +26,6 @@ ALTER TABLE push_subscriptions
   ADD CONSTRAINT push_subscriptions_min_relevance_check
   CHECK (min_relevance BETWEEN 1 AND 5);
 
--- NULL = wszystkie kategorie. Pusta tablica byłaby dwuznaczna, więc jej unikamy.
+-- NULL = all categories. An empty array would be ambiguous, so we avoid it.
 ALTER TABLE push_subscriptions
   ADD COLUMN IF NOT EXISTS topics TEXT[];

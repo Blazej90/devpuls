@@ -6,55 +6,49 @@ import { Logo } from "@/components/logo";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { BackgroundBeams } from "@/components/ui/background-beams";
 
-/** „1 źródło", „2 źródła", „11 źródeł" — polska odmiana przez przypadki. */
-function odmianaZrodel(liczba: number): string {
-  if (liczba === 1) return "1 źródło";
-  const reszta = liczba % 10;
-  const dziesiatki = liczba % 100;
-  const mnoga = reszta >= 2 && reszta <= 4 && (dziesiatki < 12 || dziesiatki > 14);
-  return `${liczba} ${mnoga ? "źródła" : "źródeł"}`;
+/** "1 źródło", "2 źródła", "11 źródeł" — Polish plural inflection. */
+function formatSourceCount(count: number): string {
+  if (count === 1) return "1 źródło";
+  const units = count % 10;
+  const teens = count % 100;
+  const fewForm = units >= 2 && units <= 4 && (teens < 12 || teens > 14);
+  return `${count} ${fewForm ? "źródła" : "źródeł"}`;
 }
 
 /**
- * Nagłówek strony (ADR-0003, Etap 4).
+ * Page header (ADR-0003, Stage 4).
  *
- * Zamiast pięciu ozdobnych chipów z kategoriami — pasek faktów. Chipy udawały
- * filtr, którego nie było; teraz filtr istnieje naprawdę, kawałek niżej, więc
- * ich powtarzanie tutaj tylko myliło. Liczby mówią to samo, co dawny opis,
- * tyle że pokazują skalę, zamiast ją opisywać.
+ * A facts strip instead of five decorative category chips. The chips pretended
+ * to be a filter that did not exist; now the filter is real, a little further
+ * down, so repeating them here only confused. The numbers say the same thing
+ * the old description did, except they show the scale instead of describing it.
  */
-export function Hero({
-  nieprzeczytane,
-  zrodel,
-}: {
-  nieprzeczytane: number;
-  zrodel: number;
-}) {
-  const fakty = [
-    odmianaZrodel(zrodel),
-    // Zgodne z cronem w `.github/workflows/ingest.yml` (ADR-0002).
+export function Hero({ unread, sources }: { unread: number; sources: number }) {
+  const facts = [
+    formatSourceCount(sources),
+    // Matches the cron in `.github/workflows/ingest.yml` (ADR-0002).
     "sprawdzane co 2 dni",
     "trafność 1–5",
   ];
 
   return (
     <header className="relative -mx-6 -mt-12 overflow-hidden px-6 pt-12 pb-8">
-      {/* Beams zostają, ale zamknięte w banerze — jako tło całej strony biłyby
-          się z przewijaną listą. */}
+      {/* The beams stay, but confined to the banner — as a background for the
+          whole page they would fight with the scrolling list. */}
       <BackgroundBeams className="pointer-events-none" />
 
       <div className="relative z-10 space-y-5">
         <div className="flex items-start justify-between gap-4">
           <div className="flex items-center gap-3">
             <Logo />
-            {nieprzeczytane > 0 && <Badge>{nieprzeczytane} nowych</Badge>}
+            {unread > 0 && <Badge>{unread} nowych</Badge>}
           </div>
-          {/* „O aplikacji" jako link w nagłówku, nie karta na dole listy
-              (Etap 5): jako karta wyglądała identycznie jak wpis i im więcej
-              appka miała treści, tym trudniej było do niej dotrzeć. */}
+          {/* "O aplikacji" as a header link rather than a card at the bottom of
+              the list (Stage 5): as a card it looked identical to an item, and
+              the more content the app had, the harder it was to reach. */}
           <div className="flex shrink-0 items-center gap-2">
             <Link
-              href="/o-aplikacji"
+              href="/about"
               className="text-muted-foreground hover:text-foreground hover:bg-accent focus-visible:ring-ring inline-flex items-center gap-1.5 rounded-md px-2 py-1.5 text-sm transition-colors focus-visible:ring-1 focus-visible:outline-none"
             >
               <Info className="size-4" aria-hidden />
@@ -75,10 +69,10 @@ export function Hero({
         </div>
 
         <ul className="text-muted-foreground flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
-          {fakty.map((fakt, index) => (
-            <li key={fakt} className="flex items-center gap-2">
+          {facts.map((fact, index) => (
+            <li key={fact} className="flex items-center gap-2">
               {index > 0 && <span aria-hidden>·</span>}
-              <span>{fakt}</span>
+              <span>{fact}</span>
             </li>
           ))}
         </ul>

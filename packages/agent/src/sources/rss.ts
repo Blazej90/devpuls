@@ -10,7 +10,7 @@ const parser = new XMLParser({
   trimValues: true,
 });
 
-/** RSS bywa niekonsekwentne — pojedynczy <item> nie jest tablicą. */
+/** RSS can be inconsistent — a single <item> is not an array. */
 function toArray<T>(value: T | T[] | undefined): T[] {
   if (value === undefined) return [];
   return Array.isArray(value) ? value : [value];

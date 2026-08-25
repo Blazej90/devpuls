@@ -18,29 +18,29 @@ function relativeTime(hoursAgo: number): string {
   return format.format(-Math.round(hoursAgo / 24), "day");
 }
 
-type Ton = "ok" | "uwaga" | "awaria";
+type Tone = "ok" | "warning" | "failure";
 
-const TONY: Record<Ton, { box: string; icon: string }> = {
+const TONES: Record<Tone, { box: string; icon: string }> = {
   ok: { box: "text-muted-foreground", icon: "text-muted-foreground" },
-  uwaga: {
+  warning: {
     box: "rounded-lg border border-amber-500/40 bg-amber-500/5 p-3 text-amber-700 dark:text-amber-400",
     icon: "text-amber-600 dark:text-amber-400",
   },
-  awaria: {
+  failure: {
     box: "border-destructive/40 bg-destructive/5 text-destructive rounded-lg border p-3",
     icon: "text-destructive",
   },
 };
 
 /**
- * Pasek zdrowia pipeline'u (Faza 8).
+ * Pipeline health strip (Phase 8).
  *
- * Przy cronie co 2 dni (ADR-0002) cicha awaria byłaby niewidoczna do
- * następnego wejścia do zakładki Actions. Ten pasek jest w appce, bo to
- * jedyne miejsce, które użytkownik i tak otwiera.
+ * With a cron running every 2 days (ADR-0002) a silent failure would stay
+ * invisible until someone opened the Actions tab. This strip lives in the app
+ * because that is the one place the user opens anyway.
  *
- * Gdy wszystko działa, zajmuje jedną linijkę szarym tekstem — monitoring,
- * który krzyczy przy zdrowym stanie, przestaje być czytany.
+ * When everything works it takes a single line of grey text — monitoring that
+ * shouts while healthy stops being read.
  */
 export function RunStatus({ run }: { run: LastRun | null }) {
   if (run === null) {
@@ -52,18 +52,18 @@ export function RunStatus({ run }: { run: LastRun | null }) {
     );
   }
 
-  const przeterminowany = isStale(run);
-  const ton: Ton =
-    run.status === "failed" || przeterminowany
-      ? "awaria"
+  const stale = isStale(run);
+  const tone: Tone =
+    run.status === "failed" || stale
+      ? "failure"
       : run.status === "degraded"
-        ? "uwaga"
+        ? "warning"
         : "ok";
 
   const Icon =
-    ton === "awaria" ? CircleAlert : ton === "uwaga" ? TriangleAlert : CircleCheck;
+    tone === "failure" ? CircleAlert : tone === "warning" ? TriangleAlert : CircleCheck;
 
-  const naglowek = przeterminowany
+  const headline = stale
     ? `Brak przebiegu od ponad ${Math.round(STALE_AFTER_HOURS / 24)} dni — sprawdź harmonogram w GitHub Actions`
     : run.status === "failed"
       ? "Ostatni przebieg nie doszedł do końca"
@@ -72,13 +72,13 @@ export function RunStatus({ run }: { run: LastRun | null }) {
         : `Sprawdzono ${relativeTime(run.hoursAgo)} · ${run.sourcesOk} źródeł · ${run.assessed} nowych wpisów`;
 
   return (
-    <div className={cn("text-sm", TONY[ton].box)}>
+    <div className={cn("text-sm", TONES[tone].box)}>
       <p className="flex items-center gap-2">
-        <Icon className={cn("size-4 shrink-0", TONY[ton].icon)} aria-hidden />
-        <span>{naglowek}</span>
+        <Icon className={cn("size-4 shrink-0", TONES[tone].icon)} aria-hidden />
+        <span>{headline}</span>
       </p>
 
-      {ton !== "ok" && run.errors.length > 0 && (
+      {tone !== "ok" && run.errors.length > 0 && (
         <details className="mt-2">
           <summary className="cursor-pointer text-xs opacity-80">
             Szczegóły ({run.errors.length})
@@ -94,7 +94,7 @@ export function RunStatus({ run }: { run: LastRun | null }) {
         </details>
       )}
 
-      {ton !== "ok" && !przeterminowany && (
+      {tone !== "ok" && !stale && (
         <p className="mt-2 text-xs opacity-70">
           Sprawdzono {relativeTime(run.hoursAgo)} · {run.sourcesOk} źródeł OK,{" "}
           {run.sourcesFailed} nieudanych

@@ -5,9 +5,9 @@ import type { RunReport } from "@/monitor.js";
 import type { AssessedItem, SourceConfig } from "@/types.js";
 
 /**
- * Klient HTTP Neona — bez utrzymywania puli połączeń, co pasuje do agenta
- * uruchamianego jako jednorazowy skrypt z GitHub Actions.
- * Migracje tabel: Faza 2 w TODO.md (sources, items, push_subscriptions).
+ * The Neon HTTP client — no connection pool to keep alive, which suits an agent
+ * running as a one-shot script from GitHub Actions.
+ * Table migrations: Phase 2 in TODO.md (sources, items, push_subscriptions).
  */
 let sql: ReturnType<typeof neon> | null = null;
 
@@ -21,13 +21,13 @@ function db() {
 export interface PushSubscriptionRow {
   endpoint: string;
   keysJson: { p256dh: string; auth: string };
-  /** Próg trafności tej subskrypcji (1-5). */
+  /** This subscription's relevance threshold (1-5). */
   minRelevance: number;
-  /** Wybrane kategorie; `null` = wszystkie. */
+  /** Selected categories; `null` = all of them. */
   topics: string[] | null;
 }
 
-/** Upsert źródeł z `sources.json`, żeby `items.source_id` miał na co wskazywać. */
+/** Upsert of the sources from `sources.json`, so `items.source_id` has a target. */
 export async function syncSources(sources: SourceConfig[]): Promise<void> {
   for (const source of sources) {
     await db()`
@@ -42,8 +42,8 @@ export async function syncSources(sources: SourceConfig[]): Promise<void> {
 }
 
 /**
- * Deduplikacja po URL — zwraca URL-e, które już widzieliśmy.
- * Jedno zapytanie na przebieg zamiast jednego na wpis.
+ * Deduplication by URL — returns the URLs we have seen already.
+ * One query per run instead of one per item.
  */
 export async function findKnownUrls(urls: string[]): Promise<Set<string>> {
   if (urls.length === 0) return new Set();
@@ -55,7 +55,7 @@ export async function findKnownUrls(urls: string[]): Promise<Set<string>> {
   return new Set(rows.map((row) => row.url));
 }
 
-/** Zapisuje oceniony wpis. Zwraca id — potrzebne do oznaczenia wysyłki push. */
+/** Stores an assessed item. Returns the id — needed to mark the push as sent. */
 export async function insertItem(item: AssessedItem): Promise<number | null> {
   const rows = (await db()`
     INSERT INTO items
@@ -67,8 +67,8 @@ export async function insertItem(item: AssessedItem): Promise<number | null> {
     RETURNING id
   `) as { id: string }[];
 
-  // BIGINT wraca ze sterownika jako string — konwertujemy na granicy modułu,
-  // żeby reszta kodu nie musiała o tym pamiętać.
+  // BIGINT comes back from the driver as a string — we convert it at the module
+  // boundary so the rest of the code does not have to remember.
   const id = rows[0]?.id;
   return id === undefined ? null : Number(id);
 }
@@ -76,7 +76,7 @@ export async function insertItem(item: AssessedItem): Promise<number | null> {
 export async function markNotified(itemIds: number[]): Promise<void> {
   if (itemIds.length === 0) return;
 
-  // Porównanie po stringach — patrz komentarz przy `insertItem`.
+  // Comparison by strings — see the comment on `insertItem`.
   await db()`
     UPDATE items SET notified_at = NOW() WHERE id = ANY(${itemIds.map(String)})
   `;
@@ -100,16 +100,16 @@ export async function listSubscriptions(): Promise<PushSubscriptionRow[]> {
   }));
 }
 
-/** Subskrypcja odrzucona przez push service (410/404) — nie ma po co jej trzymać. */
+/** A subscription rejected by the push service (410/404) — no reason to keep it. */
 export async function deleteSubscription(endpoint: string): Promise<void> {
   await db()`DELETE FROM push_subscriptions WHERE endpoint = ${endpoint}`;
 }
 
 /**
- * Jeden wiersz na przebieg — dziennik zdrowia agenta (migracja 004).
+ * One row per run — the agent's health log (migration 004).
  *
- * Zapis jest „best effort": jeśli padnie sam zapis, nie chcemy z tego powodu
- * wywracać przebiegu, który poza tym dowiózł wpisy i powiadomienia.
+ * The write is best effort: if the write itself fails, we do not want that to
+ * bring down a run which otherwise delivered items and notifications.
  */
 export async function saveRun(report: RunReport): Promise<void> {
   try {
@@ -124,6 +124,6 @@ export async function saveRun(report: RunReport): Promise<void> {
          ${JSON.stringify(report.errors)}::jsonb)
     `;
   } catch (error: unknown) {
-    console.error("[monitor] nie udało się zapisać przebiegu:", error);
+    console.error("[monitor] storing the run failed:", error);
   }
 }

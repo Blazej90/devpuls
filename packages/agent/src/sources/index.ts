@@ -14,7 +14,7 @@ const fetchers: Record<SourceType, Fetcher> = {
 export function fetchSource(source: SourceConfig): Promise<NormalizedItem[]> {
   const fetcher = fetchers[source.type];
   if (!fetcher) {
-    throw new Error(`${source.id}: nieznany typ źródła "${source.type}"`);
+    throw new Error(`${source.id}: unknown source type "${source.type}"`);
   }
   return fetcher(source);
 }

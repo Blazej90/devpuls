@@ -16,10 +16,12 @@ const AssessmentSchema = z.object({
     .string()
     .describe("Streszczenie po polsku, 2-3 zdania, bez powtarzania tytułu"),
   topics: z
-    .array(z.enum(["typescript", "react", "javascript", "fullstack", "ai", "inne"]))
+    .array(z.enum(["typescript", "react", "javascript", "fullstack", "ai", "other"]))
     .describe("Tematy, których wpis faktycznie dotyczy"),
 });
 
+// The prompt stays in Polish: it is product content, not code — the summaries
+// it produces go straight into a Polish-language app.
 const SYSTEM_PROMPT = `Oceniasz nowinki techniczne dla jednego, konkretnego odbiorcy:
 programisty fullstack pracującego na co dzień w TypeScript i React, śledzącego
 ekosystem JavaScriptu oraz narzędzia AI dla deweloperów.
@@ -36,14 +38,14 @@ Streszczenie pisz po polsku, rzeczowo, 2-3 zdania. Zero marketingowego tonu, zer
 "w tym artykule dowiesz się". Pisz, co konkretnie się wydarzyło i co z tego wynika.
 Jeśli masz tylko tytuł i krótki lead, streszczaj to, co jest — nie zmyślaj szczegółów.`;
 
-/** Jedno wywołanie Claude na wpis: ocena trafności + streszczenie PL. */
+/** One Claude call per item: relevance score plus a Polish summary. */
 export async function assessItem(item: NormalizedItem): Promise<Assessment | null> {
   const excerpt = item.excerpt ? `\nLead: ${item.excerpt.slice(0, 2000)}` : "";
 
   const parsed = await getAnthropic().messages.parse({
     model: MODEL,
     max_tokens: 1024,
-    // Bez `effort` — Haiku 4.5 odrzuca ten parametr błędem 400.
+    // No `effort` — Haiku 4.5 rejects that parameter with a 400.
     output_config: { format: zodOutputFormat(AssessmentSchema) },
     system: SYSTEM_PROMPT,
     messages: [
@@ -54,18 +56,18 @@ export async function assessItem(item: NormalizedItem): Promise<Assessment | nul
     ],
   });
 
-  // Odmowa zdarza się np. przy wpisach o exploitach z Hacker News.
-  // Pomijamy wpis zamiast wywracać cały przebieg.
+  // Refusals happen for instance on exploit-related posts from Hacker News.
+  // We skip the item instead of bringing down the whole run.
   if (parsed.stop_reason === "refusal") {
-    console.warn(`[claude] odmowa oceny: ${item.url}`);
-    noteError("claude", item.url, "model odmówił oceny");
+    console.warn(`[claude] assessment refused: ${item.url}`);
+    noteError("claude", item.url, "the model refused to assess the item");
     return null;
   }
 
   const output = parsed.parsed_output;
   if (!output) {
-    console.warn(`[claude] pusty parsed_output dla: ${item.url}`);
-    noteError("claude", item.url, "pusty parsed_output");
+    console.warn(`[claude] empty parsed_output for: ${item.url}`);
+    noteError("claude", item.url, "empty parsed_output");
     return null;
   }
 

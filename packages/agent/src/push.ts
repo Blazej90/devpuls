@@ -19,94 +19,98 @@ function configure(): void {
   configured = true;
 }
 
-/** Payload odbierany przez service workera w `apps/web/public/sw.js`. */
+/** The payload received by the service worker in `apps/web/public/sw.js`. */
 interface PushPayload {
   title: string;
   body: string;
   url: string;
 }
 
-/** Adres appki — klik w powiadomienie otwiera skrzynkę, nie pojedynczy artykuł. */
+/** The app address — clicking a notification opens the inbox, not one article. */
 const APP_URL = process.env.APP_URL ?? "https://devpuls-ecru.vercel.app/";
 
-function odmianaWpisow(liczba: number): string {
-  if (liczba === 1) return "1 nowy wpis";
-  const reszta = liczba % 10;
-  const dziesiatki = liczba % 100;
-  const mnoga = reszta >= 2 && reszta <= 4 && (dziesiatki < 12 || dziesiatki > 14);
-  return `${liczba} ${mnoga ? "nowe wpisy" : "nowych wpisów"}`;
+/** "1 nowy wpis", "2 nowe wpisy", "11 nowych wpisów" — Polish plural inflection. */
+function formatItemCount(count: number): string {
+  if (count === 1) return "1 nowy wpis";
+  const units = count % 10;
+  const teens = count % 100;
+  const fewForm = units >= 2 && units <= 4 && (teens < 12 || teens > 14);
+  return `${count} ${fewForm ? "nowe wpisy" : "nowych wpisów"}`;
 }
 
 /**
- * Treść digestu: liczba wpisów plus kilka najtrafniejszych tytułów, żeby dało
- * się ocenić, czy warto wchodzić, bez otwierania appki (ADR-0002).
+ * The digest body: the number of items plus a few of the most relevant titles,
+ * so it is possible to judge whether it is worth going in without opening the
+ * app (ADR-0002).
  */
 function toDigestPayload(items: AssessedItem[]): PushPayload {
-  const najlepsze = [...items]
+  const top = [...items]
     .sort((a, b) => b.assessment.relevance - a.assessment.relevance)
     .slice(0, 3)
     .map((item) => item.title);
 
-  const reszta = items.length - najlepsze.length;
-  const ogon = reszta > 0 ? `\n…i ${reszta} więcej` : "";
+  const rest = items.length - top.length;
+  const tail = rest > 0 ? `\n…i ${rest} więcej` : "";
 
   return {
-    title: `DevPuls — ${odmianaWpisow(items.length)}`,
-    body: najlepsze.join("\n") + ogon,
+    title: `DevPuls — ${formatItemCount(items.length)}`,
+    body: top.join("\n") + tail,
     url: APP_URL,
   };
 }
 
 /**
- * Czy ten wpis pasuje do ustawień danej subskrypcji.
+ * Whether this item matches the settings of a given subscription.
  *
- * Filtr siedzi tutaj, a nie w `pipeline.ts`, bo od migracji 002 próg i
- * kategorie są zapisane **przy subskrypcji** — dwa urządzenia mogą chcieć
- * czegoś innego z tego samego przebiegu.
+ * The filter lives here rather than in `pipeline.ts` because since migration
+ * 002 the threshold and the categories are stored **with the subscription** —
+ * two devices may want different things out of the same run.
  */
-function pasuje(item: AssessedItem, subscription: PushSubscriptionRow): boolean {
+function matches(item: AssessedItem, subscription: PushSubscriptionRow): boolean {
   if (item.assessment.relevance < subscription.minRelevance) return false;
 
-  const wybrane = subscription.topics;
-  // null lub pusta lista = wszystkie kategorie.
-  if (!wybrane || wybrane.length === 0) return true;
+  const selected = subscription.topics;
+  // null or an empty list = all categories.
+  if (!selected || selected.length === 0) return true;
 
-  return item.assessment.topics.some((topic) => wybrane.includes(topic));
+  return item.assessment.topics.some((topic) => selected.includes(topic));
 }
+
 /**
- * Wysyła **jedno zbiorcze** powiadomienie na przebieg (ADR-0002). Wcześniej
- * `pipeline.ts` wołał wysyłkę osobno dla każdego wpisu i 44 powiadomienia
- * przychodziły jedno po drugim w odstępach kilku sekund.
+ * Sends **one combined** notification per run (ADR-0002). Previously
+ * `pipeline.ts` called the send separately for every item and 44 notifications
+ * arrived one after another, seconds apart.
  *
- * Każda subskrypcja dostaje digest złożony z wpisów, które przepuszczają
- * **jej** ustawienia — dwa urządzenia mogą zobaczyć różne liczby.
+ * Each subscription gets a digest built from the items that pass **its** own
+ * settings — two devices may see different counts.
  *
- * Zwraca liczbę subskrypcji, do których udało się dostarczyć.
+ * Returns the number of subscriptions that were delivered to.
  */
 export async function sendDigest(items: AssessedItem[]): Promise<number> {
   if (items.length === 0) return 0;
 
-  // Najpierw subskrypcje, dopiero potem klucze VAPID: bez ani jednej subskrypcji
-  // nie ma czego wysyłać, więc brak kluczy nie może wywracać całego przebiegu.
+  // Subscriptions first, VAPID keys only afterwards: without a single
+  // subscription there is nothing to send, so missing keys must not bring down
+  // the whole run.
   const subscriptions = await listSubscriptions();
   if (subscriptions.length === 0) return 0;
 
-  const doWyslania = subscriptions
+  const targets = subscriptions
     .map((subscription) => ({
       subscription,
-      pasujace: items.filter((item) => pasuje(item, subscription)),
+      matching: items.filter((item) => matches(item, subscription)),
     }))
-    .filter((wpis) => wpis.pasujace.length > 0);
+    .filter((target) => target.matching.length > 0);
 
-  if (doWyslania.length === 0) return 0;
+  if (targets.length === 0) return 0;
 
   configure();
 
   const results = await Promise.allSettled(
-    doWyslania.map(({ subscription, pasujace }) =>
+    targets.map(({ subscription, matching }) =>
       webpush.sendNotification(
         { endpoint: subscription.endpoint, keys: subscription.keysJson },
-        JSON.stringify(toDigestPayload(pasujace)),
+        JSON.stringify(toDigestPayload(matching)),
       ),
     ),
   );
@@ -114,30 +118,30 @@ export async function sendDigest(items: AssessedItem[]): Promise<number> {
   let delivered = 0;
 
   for (const [index, result] of results.entries()) {
-    const wpis = doWyslania[index];
-    if (!wpis) continue;
+    const target = targets[index];
+    if (!target) continue;
 
     if (result.status === "fulfilled") {
       delivered += 1;
       console.log(
-        `[push] digest z ${wpis.pasujace.length} wpisami → ${new URL(wpis.subscription.endpoint).hostname}`,
+        `[push] digest with ${target.matching.length} items → ${new URL(target.subscription.endpoint).hostname}`,
       );
       continue;
     }
 
     const status = (result.reason as { statusCode?: number }).statusCode;
 
-    // 404/410 = subskrypcja wygasła. Na iOS zdarza się to po dłuższej
-    // nieaktywności PWA (patrz ADR-0001, sekcja Konsekwencje).
+    // 404/410 = the subscription has expired. On iOS this happens after a
+    // longer period of PWA inactivity (see ADR-0001, Consequences).
     if (status === 404 || status === 410) {
-      await deleteSubscription(wpis.subscription.endpoint);
-      console.warn(`[push] usunięto wygasłą subskrypcję (${status})`);
+      await deleteSubscription(target.subscription.endpoint);
+      console.warn(`[push] removed an expired subscription (${status})`);
     } else {
-      console.error(`[push] błąd wysyłki (${status ?? "brak kodu"})`, result.reason);
+      console.error(`[push] delivery error (${status ?? "no code"})`, result.reason);
       noteError(
         "push",
-        new URL(wpis.subscription.endpoint).hostname,
-        `HTTP ${status ?? "brak kodu"}`,
+        new URL(target.subscription.endpoint).hostname,
+        `HTTP ${status ?? "no code"}`,
       );
     }
   }

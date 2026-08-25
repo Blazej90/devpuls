@@ -1,6 +1,6 @@
 import { sql } from "@/lib/db";
 
-/** Rodzaje zastrzeżeń — muszą się zgadzać z `packages/agent/src/monitor.ts`. */
+/** Warning kinds — must stay in sync with `packages/agent/src/monitor.ts`. */
 export type ErrorKind = "source" | "empty" | "claude" | "push" | "fatal";
 export type RunStatus = "ok" | "degraded" | "failed";
 
@@ -19,13 +19,13 @@ export interface LastRun {
   assessed: number;
   delivered: number;
   errors: RunError[];
-  /** Ile godzin temu skończył się przebieg — liczone w bazie, żeby nie zależeć
-   *  od strefy czasowej serwera renderującego. */
+  /** How many hours ago the run finished — computed in the database so it does
+   *  not depend on the time zone of the rendering server. */
   hoursAgo: number;
 }
 
 interface RunRow {
-  /** TIMESTAMPTZ — sterownik Neona parsuje go do obiektu `Date`, nie do stringa. */
+  /** TIMESTAMPTZ — the Neon driver parses it into a `Date` object, not a string. */
   finished_at: Date | string;
   duration_ms: number;
   status: RunStatus;
@@ -34,13 +34,14 @@ interface RunRow {
   assessed: number;
   delivered: number;
   errors: RunError[];
-  /** `EXTRACT(EPOCH …)` zwraca numeric, a sterownik Neona numeric jako string. */
+  /** `EXTRACT(EPOCH …)` returns numeric, and the Neon driver returns numeric as a string. */
   hours_ago: string | number;
 }
 
 /**
- * Ostatni przebieg agenta (migracja 004). `null`, gdy agent nie zdążył jeszcze
- * nic zapisać — świeża baza albo pierwsze uruchomienie po wdrożeniu Fazy 8.
+ * The agent's last run (migration 004). `null` when the agent has not managed
+ * to store anything yet — a fresh database, or the first start after Phase 8
+ * was deployed.
  */
 export async function getLastRun(): Promise<LastRun | null> {
   const rows = (await sql()`
@@ -73,10 +74,10 @@ export async function getLastRun(): Promise<LastRun | null> {
 }
 
 /**
- * Cron chodzi co 2 dni (ADR-0002), a GitHub potrafi opóźnić albo pominąć slot,
- * więc alarmujemy dopiero po trzech dobach. Powyżej tego progu milczenie
- * przestaje być normalne: wyłączony workflow, wygasły sekret albo padnięty
- * harmonogram wyglądają dokładnie tak — brak nowych wierszy w `runs`.
+ * The cron runs every 2 days (ADR-0002) and GitHub can delay or skip a slot, so
+ * we only raise the alarm after three days. Beyond that threshold silence stops
+ * being normal: a disabled workflow, an expired secret or a broken schedule all
+ * look exactly like this — no new rows in `runs`.
  */
 export const STALE_AFTER_HOURS = 72;
 
@@ -85,18 +86,18 @@ export function isStale(run: LastRun | null): boolean {
 }
 
 /**
- * Wariant dla strony głównej: nie wywraca renderu.
+ * The variant for the home page: it never breaks the render.
  *
- * Wdrożenie na Vercela idzie przed migracją bazy, więc tuż po wypuszczeniu
- * Fazy 8 tabela `runs` jeszcze nie istnieje — a brak dziennika nie jest
- * powodem, żeby skrzynka przestała się otwierać. Alarmowanie zostaje po
- * stronie `/api/health`, gdzie błąd odczytu ma zwrócić 503, a nie `null`.
+ * The Vercel deployment goes out before the database migration, so right after
+ * Phase 8 shipped the `runs` table did not exist yet — and a missing log is no
+ * reason for the inbox to stop opening. Raising the alarm stays with
+ * `/api/health`, where a read error should return a 503 rather than `null`.
  */
 export async function getLastRunSafe(): Promise<LastRun | null> {
   try {
     return await getLastRun();
   } catch (error: unknown) {
-    console.error("[runs] odczyt ostatniego przebiegu nieudany", error);
+    console.error("[runs] reading the last run failed", error);
     return null;
   }
 }

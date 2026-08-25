@@ -5,26 +5,26 @@ import { getLastRun, isStale, STALE_AFTER_HOURS } from "@/lib/runs";
 export const dynamic = "force-dynamic";
 
 /**
- * Zdrowie pipeline'u w jednym GET-cie (Faza 8).
+ * Pipeline health in a single GET (Phase 8).
  *
- * Istnieje po to, żeby dało się podpiąć zewnętrzny monitoring (UptimeRobot,
- * Better Stack) — appka pokazuje ten sam stan, ale ktoś musi ją otworzyć.
- * Kod odpowiedzi jest nośnikiem alarmu, bo monitoringi reagują na status HTTP,
- * nie na treść JSON-a. 503 dostaje wyłącznie twarda awaria i cisza (brak
- * świeżego przebiegu) — `degraded` zostaje na 200, bo jeden feed z chwilowym
- * 503 nie jest powodem do budzenia nikogo o trzeciej w nocy. Szczegóły
- * zastrzeżeń są w treści odpowiedzi i w samej appce.
+ * It exists so external monitoring (UptimeRobot, Better Stack) can be wired up
+ * — the app shows the same state, but somebody has to open it. The response
+ * code carries the alarm, because monitors react to HTTP status rather than to
+ * the JSON body. Only a hard failure and silence (no recent run) get a 503 —
+ * `degraded` stays at 200, because one feed with a transient 503 is no reason
+ * to wake anyone at three in the morning. The details of the warnings are in
+ * the response body and in the app itself.
  *
- * Brak nowych przebiegów jest tu traktowany jak awaria — to jedyna droga,
- * żeby wykryć wyłączony workflow albo wygasły sekret. Sam agent wtedy nie
- * zgłosi niczego, bo w ogóle się nie uruchamia.
+ * No recent runs is treated here as a failure — that is the only way to detect
+ * a disabled workflow or an expired secret. The agent itself will report
+ * nothing then, because it never starts at all.
  */
 export async function GET() {
   let run;
   try {
     run = await getLastRun();
   } catch (error: unknown) {
-    console.error("[api/health] odczyt przebiegów nieudany", error);
+    console.error("[api/health] reading runs failed", error);
     return NextResponse.json(
       { status: "failed", reason: "database-unreachable" },
       { status: 503 },
@@ -32,7 +32,7 @@ export async function GET() {
   }
 
   const stale = isStale(run);
-  const zdrowy = run !== null && run.status !== "failed" && !stale;
+  const healthy = run !== null && run.status !== "failed" && !stale;
 
   return NextResponse.json(
     {
@@ -50,6 +50,6 @@ export async function GET() {
         errors: run.errors,
       },
     },
-    { status: zdrowy ? 200 : 503 },
+    { status: healthy ? 200 : 503 },
   );
 }

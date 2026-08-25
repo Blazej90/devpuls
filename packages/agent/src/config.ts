@@ -4,7 +4,7 @@ import path from "node:path";
 
 import type { SourceConfig } from "@/types.js";
 
-/** ESM nie ma __dirname — wyliczamy katalog pakietu z import.meta.url. */
+/** ESM has no __dirname — we derive the package directory from import.meta.url. */
 const packageRoot = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
   "..",
@@ -13,17 +13,18 @@ const packageRoot = path.resolve(
 const SOURCES_PATH = path.join(packageRoot, "config", "sources.json");
 
 /**
- * Domyślny próg trafności dla nowo utworzonych subskrypcji (1-5).
+ * The default relevance threshold for newly created subscriptions (1-5).
  *
- * Od migracji 002 faktyczny próg siedzi w kolumnie `push_subscriptions.min_relevance`
- * i zmienia się z poziomu appki — ta stała służy już tylko za wartość startową
- * i jest duplikatem DEFAULT-a z SQL-a.
+ * Since migration 002 the actual threshold lives in the
+ * `push_subscriptions.min_relevance` column and is changed from inside the app
+ * — this constant only serves as the starting value and duplicates the DEFAULT
+ * from the SQL.
  */
 export const DEFAULT_RELEVANCE_THRESHOLD = Number(
   process.env.RELEVANCE_THRESHOLD ?? "4",
 );
 
-/** Ile wpisów maksymalnie bierzemy z jednego źródła na przebieg. */
+/** How many items we take from a single source per run, at most. */
 export const MAX_ITEMS_PER_SOURCE = Number(
   process.env.MAX_ITEMS_PER_SOURCE ?? "15",
 );
@@ -33,17 +34,17 @@ export async function loadSources(): Promise<SourceConfig[]> {
   const parsed = JSON.parse(raw) as { sources: SourceConfig[] };
 
   if (!Array.isArray(parsed.sources) || parsed.sources.length === 0) {
-    throw new Error(`Pusty lub niepoprawny config źródeł: ${SOURCES_PATH}`);
+    throw new Error(`Empty or invalid source config: ${SOURCES_PATH}`);
   }
 
   return parsed.sources;
 }
 
-/** Rzuca czytelnym błędem zamiast pozwolić na `undefined` w połowie pipeline'u. */
+/** Fails with a readable error instead of letting `undefined` reach mid-pipeline. */
 export function requireEnv(name: string): string {
   const value = process.env[name];
   if (!value) {
-    throw new Error(`Brak zmiennej środowiskowej ${name} — patrz .env.example`);
+    throw new Error(`Missing environment variable ${name} — see .env.example`);
   }
   return value;
 }

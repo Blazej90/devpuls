@@ -37,8 +37,8 @@ devpuls/
 │   └── adr/
 │       ├── template.md
 │       ├── 0001-poc-architecture.md
-│       ├── 0002-digest-i-skrzynka-odbiorcza.md
-│       └── 0003-przebudowa-ux-skrzynki.md
+│       ├── 0002-digest-and-inbox.md
+│       └── 0003-inbox-ux-rebuild.md
 ├── apps/
 │   └── web/                      # Next.js PWA
 │       ├── package.json
@@ -52,7 +52,7 @@ devpuls/
 │       │   ├── layout.tsx        # <html lang="pl">, metadata, viewport, bootstrap PWA
 │       │   ├── page.tsx
 │       │   ├── icon.svg          # favicon (konwencja Next)
-│       │   ├── o-aplikacji/page.tsx # opis appki + nota autora
+│       │   ├── about/page.tsx    # opis appki + nota autora
 │       │   ├── globals.css       # @theme + tokeny kolorów (light/dark)
 │       │   └── api/
 │       │       ├── health/route.ts           # GET stan pipeline'u (200/503)
@@ -67,10 +67,10 @@ devpuls/
 │       │   │                   #   separator, sonner, background-beams
 │       │   ├── pwa/              # sw, prompt instalacji, zgoda i ustawienia pushy
 │       │   ├── inbox.tsx         # skrzynka: grupy dat, zaznaczanie, usuwanie
-│       │   ├── skrzynka-filtry.tsx # zakładki i chipy kategorii (linki)
+│       │   ├── inbox-filters.tsx # zakładki i chipy kategorii (linki)
 │       │   ├── hero.tsx          # nagłówek: logo, claim, pasek faktów
 │       │   ├── logo.tsx          # znak pulsu (SVG, currentColor)
-│       │   ├── do-gory.tsx       # powrót na górę przy długich listach
+│       │   ├── scroll-to-top.tsx # powrót na górę przy długich listach
 │       │   ├── theme-provider.tsx / theme-toggle.tsx
 │       │   ├── run-status.tsx    # pasek zdrowia ostatniego przebiegu
 │       │   ├── theme-provider.tsx # next-themes, klasa `.dark` na <html>
@@ -79,7 +79,7 @@ devpuls/
 │       │   ├── utils.ts          # cn() — wymagane przez shadcn/Aceternity
 │       │   ├── db.ts             # klient Neona dla route handlerów
 │       │   ├── items.ts          # cała selekcja i zapisy wpisów (ADR-0003)
-│       │   ├── grupowanie.ts     # kubełki dat + formatowanie, strefa przypięta
+│       │   ├── date-groups.ts    # kubełki dat + formatowanie, strefa przypięta
 │       │   └── runs.ts           # ostatni przebieg agenta + próg „ciszy"
 │       └── public/
 │           ├── manifest.json
@@ -97,7 +97,8 @@ devpuls/
 │       │   ├── 003_read_state.sql
 │       │   ├── 004_run_log.sql  # tabela `runs` — dziennik zdrowia
 │       │   ├── 005_soft_delete_and_recency.sql
-│       │   └── 006_ulubione.sql
+│       │   ├── 006_favourites.sql
+│       │   └── 007_rename_topic_other.sql
 │       ├── config/
 │       │   └── sources.json
 │       └── src/
@@ -238,7 +239,7 @@ klucz `theme` bywa zapisany przez inny lokalny projekt korzystający z `next-the
 
 ## 5c. Skrzynka odbiorcza — stan w URL i podział po dacie
 
-Zakładka (`?widok=nowe|przeczytane|wszystkie`) i filtr kategorii (`?temat=`) żyją
+Zakładka (`?view=new|starred|read|all`) i filtr kategorii (`?topic=`) żyją
 w **URL-u**, nie w stanie komponentu. Dzięki temu działa przycisk wstecz, odświeżenie nie
 gubi kontekstu i widok da się wysłać sobie na drugie urządzenie. Wartości domyślne są
 pomijane, więc adres bez parametrów to po prostu `/`.
@@ -247,7 +248,7 @@ Nawigacja to zwykłe `<Link>`, a **nie** shadcn `tabs`: Radix przełącza panele
 klienta, a u nas każda zakładka to inne zapytanie do bazy. Kontrolowanie go URL-em
 oznaczałoby dwa źródła prawdy walczące o to samo.
 
-Podział na „Dziś / Wczoraj / W tym tygodniu / Starsze" liczy `lib/grupowanie.ts`.
+Podział na „Dziś / Wczoraj / W tym tygodniu / Starsze" liczy `lib/date-groups.ts`.
 **Strefa jest przypięta do `Europe/Warsaw`, a nie brana ze środowiska** — komponent
 renderuje się najpierw na serwerze (Vercel liczy w UTC), a potem hydratuje w przeglądarce;
 wpis opublikowany o 00:30 czasu polskiego trafiłby na serwerze do „wczoraj", a u
@@ -255,7 +256,7 @@ użytkownika do „dziś", co React zgłosiłby jako niezgodność hydratacji. Z
 powodu „dziś" ustala serwer i przekazuje w dół jako prop, zamiast żeby każda strona
 liczyła je sobie sama. Ta sama zasada dotyczy formatowania daty pod tytułem wpisu.
 
-Lista jest stronicowana po 30 wpisów, numer strony w `?strona=`. Klasyczne strony
+Lista jest stronicowana po 30 wpisów, numer strony w `?page=`. Klasyczne strony
 przez OFFSET, a nie doładowywanie rosnącym limitem: archiwum przyrasta o kilkanaście
 wpisów co dwa dni i nie ma górnej granicy, więc rosnący limit prędzej czy później
 zacząłby ciągnąć setki rekordów na jedno żądanie. Tak rozmiar odpowiedzi jest stały
@@ -324,6 +325,12 @@ Migracja 002 dołożyła `items.topics` (kategorie od Claude, indeks GIN) oraz
 per subskrypcja, nie w ENV agenta** — dzięki temu zmieniają się z poziomu appki, bez
 redeployu, a dwa urządzenia mogą mieć różne ustawienia. Decyzję o wysyłce podejmuje
 `push.ts`, nie `pipeline.ts`. `topics = NULL` oznacza wszystkie kategorie.
+
+Wartości kategorii są po angielsku (`typescript`, `react`, `javascript`,
+`fullstack`, `ai`, `other`) — jadą przez URL, schemat wyjścia Claude i ustawienia
+pushy, więc są kodem, nie treścią. Polska zostaje wyłącznie etykieta w UI
+(`TOPIC_LABELS`). Migracja 007 przepisała starą wartość `inne` na `other`
+w `items.topics` i `push_subscriptions.topics`.
 
 Migracja 003 dołożyła `items.read_at` — stan skrzynki odbiorczej (ADR-0002). Jest
 **wspólny dla wszystkich urządzeń**, bo użytkownik jest jeden; filtry powiadomień zostają

@@ -38,7 +38,7 @@ interface AtomEntry {
   content?: unknown;
 }
 
-/** W Atomie <link> to atrybut href, często kilka wpisów z różnym rel. */
+/** In Atom, <link> carries an href attribute, often several with different rel. */
 function pickHref(link: AtomEntry["link"]): string {
   const links = toArray(link);
   const alternate = links.find((l) => l["@_rel"] === "alternate" || !l["@_rel"]);

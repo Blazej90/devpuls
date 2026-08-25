@@ -1,20 +1,20 @@
 /**
- * Service worker DevPulsa.
+ * The DevPuls service worker.
  *
- * Dwie odpowiedzialności:
- *  1. odbiór powiadomień Web Push wysyłanych przez `packages/agent`,
- *  2. minimalny cache offline dla powłoki aplikacji.
+ * Two responsibilities:
+ *  1. receiving the Web Push notifications sent by `packages/agent`,
+ *  2. a minimal offline cache for the application shell.
  *
- * Plik jest serwowany z `/sw.js`, więc jego zakres to całe origin.
+ * The file is served from `/sw.js`, so its scope is the whole origin.
  */
 
 const CACHE = "devpuls-v1";
 
-/** Zasoby, bez których appka nie pokaże nic sensownego offline. */
+/** Assets without which the app shows nothing useful offline. */
 const SHELL = ["/", "/manifest.json", "/icon-192.png"];
 
 self.addEventListener("install", (event) => {
-  // Nowy worker przejmuje kontrolę bez czekania na zamknięcie starych kart.
+  // The new worker takes over without waiting for old tabs to close.
   self.skipWaiting();
   event.waitUntil(
     caches.open(CACHE).then((cache) => cache.addAll(SHELL)),
@@ -33,8 +33,8 @@ self.addEventListener("activate", (event) => {
 });
 
 /**
- * Network-first: newsy mają być świeże, cache jest tylko awaryjny.
- * Pomijamy wszystko poza GET — POST-y do /api/push/* nie mają czego cache'ować.
+ * Network-first: the news has to be fresh, the cache is only a fallback.
+ * Everything but GET is skipped — POSTs to /api/push/* have nothing to cache.
  */
 self.addEventListener("fetch", (event) => {
   const { request } = event;
@@ -54,7 +54,7 @@ self.addEventListener("fetch", (event) => {
 });
 
 /**
- * Payload wysyłany przez `packages/agent/src/push.ts`:
+ * The payload sent by `packages/agent/src/push.ts`:
  * { title, body, url }
  */
 self.addEventListener("push", (event) => {
@@ -64,7 +64,7 @@ self.addEventListener("push", (event) => {
     try {
       payload = { ...payload, ...event.data.json() };
     } catch {
-      // Gdyby kiedyś przyszedł zwykły tekst zamiast JSON-a — nie gubimy powiadomienia.
+      // Should plain text ever arrive instead of JSON — we do not lose the notification.
       payload.body = event.data.text();
     }
   }
@@ -75,8 +75,8 @@ self.addEventListener("push", (event) => {
       icon: "/icon-192.png",
       badge: "/icon-192.png",
       lang: "pl",
-      // Tag po URL-u: ponowny push o tym samym wpisie podmienia powiadomienie,
-      // zamiast dokładać kolejne.
+      // Tagged by URL: a repeated push about the same item replaces the
+      // notification instead of stacking another one.
       tag: payload.url,
       data: { url: payload.url },
     }),
@@ -91,7 +91,7 @@ self.addEventListener("notificationclick", (event) => {
     self.clients
       .matchAll({ type: "window", includeUncontrolled: true })
       .then((clientList) => {
-        // Jeśli appka jest już otwarta, nie mnożymy okien.
+        // If the app is already open, we do not multiply windows.
         for (const client of clientList) {
           if (client.url === target && "focus" in client) return client.focus();
         }

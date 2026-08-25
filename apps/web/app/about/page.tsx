@@ -9,49 +9,48 @@ import { countSources } from "@/lib/items";
 
 export const metadata: Metadata = { title: "O aplikacji" };
 
-/** Skrzynka i ta strona czytają bazę na żywo — liczba źródeł ma być aktualna. */
+/** The inbox and this page read the database live — the source count stays current. */
 export const dynamic = "force-dynamic";
 
-interface Odnosnik {
-  etykieta: string;
+interface AuthorLink {
+  label: string;
   url: string;
-  Ikona: LucideIcon;
+  Icon: LucideIcon;
 }
 
 /**
- * Linki autora. Pusty `url` nie renderuje pozycji, więc sekcja nigdy nie
- * pokaże martwego odnośnika.
+ * The author's links. An empty `url` renders nothing, so the section can never
+ * show a dead link.
  *
- * Adres LinkedIna jest zapisany w formie procentowej, bo zawiera polskie znaki:
- * czytelnie brzmi `/in/błażej-bartoszewski-36b7162b7`. Przeglądarki kodują to
- * same przy nawigacji, ale wersja zakodowana przechodzi też przez wszystko inne
- * — i nie kusi, żeby ją "poprawić" z powrotem na literały.
+ * The LinkedIn address is stored percent-encoded because it contains Polish
+ * characters: it reads as `/in/błażej-bartoszewski-36b7162b7`. Browsers encode
+ * that themselves when navigating, but the encoded form also survives
+ * everything else — and does not tempt anyone to "fix" it back to literals.
  */
-const LINKI: Odnosnik[] = [
-  { etykieta: "GitHub", url: "https://github.com/Blazej90", Ikona: Github },
+const LINKS: AuthorLink[] = [
+  { label: "GitHub", url: "https://github.com/Blazej90", Icon: Github },
   {
-    etykieta: "Portfolio",
+    label: "Portfolio",
     url: "https://blazej-portfolio-sand.vercel.app",
-    Ikona: Globe,
+    Icon: Globe,
   },
   {
-    etykieta: "LinkedIn",
+    label: "LinkedIn",
     url: "https://www.linkedin.com/in/b%C5%82a%C5%BCej-bartoszewski-36b7162b7",
-    Ikona: Linkedin,
+    Icon: Linkedin,
   },
 ];
 
 /**
- * Osobna podstrona zamiast karty na dole skrzynki (Etap 5).
+ * A separate subpage instead of a card at the bottom of the inbox (Stage 5).
  *
- * Jako karta wyglądała identycznie jak wpis i wymagała przewinięcia całej
- * listy, żeby do niej dotrzeć — czyli była tym trudniej dostępna, im więcej
- * appka miała treści. Tekst statyczny nie ma po co konkurować z newsami
- * o to samo miejsce.
+ * As a card it looked identical to an item and required scrolling the whole
+ * list to reach — that is, the harder to get to the more content the app had.
+ * Static text has no reason to compete with the news for the same space.
  */
-export default async function OAplikacjiPage() {
-  const zrodel = await countSources();
-  const widoczne = LINKI.filter((link) => link.url !== "");
+export default async function AboutPage() {
+  const sources = await countSources();
+  const visible = LINKS.filter((link) => link.url !== "");
 
   return (
     <main className="mx-auto flex w-full max-w-2xl flex-col gap-8 px-6 py-12">
@@ -75,7 +74,7 @@ export default async function OAplikacjiPage() {
 
         <div className="text-muted-foreground space-y-4 leading-relaxed">
           <p>
-            DevPuls co dwa dni obchodzi {zrodel} źródeł z ekosystemu TypeScriptu,
+            DevPuls co dwa dni obchodzi {sources} źródeł z ekosystemu TypeScriptu,
             Reacta, JavaScriptu i narzędzi AI — blogi wydawców, kanały wydań na
             GitHubie, Hacker News i wybrane subreddity.
           </p>
@@ -101,24 +100,24 @@ export default async function OAplikacjiPage() {
         <Separator />
 
         <div className="flex flex-wrap items-center justify-between gap-3">
-          {/* Rok liczony przy renderze, nie wpisany na sztywno — strona jest
-              `force-dynamic`, więc nota nie zestarzeje się 1 stycznia. */}
+          {/* The year is computed at render time, not hard-coded — the page is
+              `force-dynamic`, so the notice will not go stale on 1 January. */}
           <p className="text-muted-foreground text-sm">
             © {new Date().getFullYear()}{" "}
             <span className="text-foreground font-medium">Błażej Bartoszewski</span>
           </p>
 
           <ul className="flex flex-wrap items-center gap-1">
-            {widoczne.map(({ etykieta, url, Ikona }) => (
-              <li key={etykieta}>
+            {visible.map(({ label, url, Icon }) => (
+              <li key={label}>
                 <a
                   href={url}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="text-muted-foreground hover:text-foreground hover:bg-accent focus-visible:ring-ring inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-sm transition-colors focus-visible:ring-1 focus-visible:outline-none"
                 >
-                  <Ikona className="size-4" aria-hidden />
-                  {etykieta}
+                  <Icon className="size-4" aria-hidden />
+                  {label}
                 </a>
               </li>
             ))}

@@ -1,63 +1,63 @@
 import { sql } from "@/lib/db";
 
 /**
- * Jedyne miejsce, w którym powstają zapytania o wpisy (ADR-0003).
+ * The only place inbox queries are built (ADR-0003).
  *
- * Od migracji 005 **każde** zapytanie musi odfiltrować `deleted_at IS NULL` —
- * to dokładnie ten rodzaj warunku, o którym zapomina się przy dopisywaniu
- * kolejnego widoku. Dlatego route handlery i strony nie piszą własnego SQL-a,
- * tylko składają widoki z funkcji poniżej.
+ * Since migration 005 **every** query has to filter on `deleted_at IS NULL` —
+ * exactly the kind of condition you forget when adding yet another view. That
+ * is why route handlers and pages never write their own SQL and compose views
+ * from the functions below instead.
  */
 
-/** Poniżej tej trafności wpis w ogóle nie trafia do skrzynki. */
+/** Items below this relevance never reach the inbox at all. */
 const MIN_RELEVANCE = 3;
 
-// Kolejność zakładek. „Ulubione" tuż po „Nowych", bo to drugi kubełek
-// „to mnie obchodzi" — archiwum i komplet są rzadziej potrzebne.
-export const WIDOKI = ["nowe", "ulubione", "przeczytane", "wszystkie"] as const;
-export type Widok = (typeof WIDOKI)[number];
+// Tab order. "Starred" sits right after "New" because it is the second
+// "this matters to me" bucket — the archive and the full list are needed less.
+export const VIEWS = ["new", "starred", "read", "all"] as const;
+export type View = (typeof VIEWS)[number];
 
-/** Kategorie zwracane przez `packages/agent/src/claude.ts`. */
-export const TEMATY = [
+/** Categories returned by `packages/agent/src/claude.ts`. */
+export const TOPICS = [
   "typescript",
   "react",
   "javascript",
   "fullstack",
   "ai",
-  "inne",
+  "other",
 ] as const;
-export type Temat = (typeof TEMATY)[number];
+export type Topic = (typeof TOPICS)[number];
 
-/** Etykiety kategorii w UI. Klucze muszą pokrywać się z `TEMATY`. */
-export const ETYKIETY_TEMATOW: Record<Temat, string> = {
+/** Category labels shown in the UI. Keys must match `TOPICS`. */
+export const TOPIC_LABELS: Record<Topic, string> = {
   typescript: "TypeScript",
   react: "React",
   javascript: "JavaScript",
   fullstack: "Fullstack",
   ai: "AI",
-  inne: "Inne",
+  other: "Inne",
 };
 
-export const ETYKIETY_WIDOKOW: Record<Widok, string> = {
-  nowe: "Nowe",
-  ulubione: "Ulubione",
-  przeczytane: "Przeczytane",
-  wszystkie: "Wszystkie",
+export const VIEW_LABELS: Record<View, string> = {
+  new: "Nowe",
+  starred: "Ulubione",
+  read: "Przeczytane",
+  all: "Wszystkie",
 };
 
-export interface Filtr {
-  widok: Widok;
-  /** `null` = bez zawężenia do kategorii. */
-  temat: Temat | null;
+export interface Filter {
+  view: View;
+  /** `null` = not narrowed to a category. */
+  topic: Topic | null;
 }
 
-/** Zakładka i filtr żyją w URL-u (ADR-0003), więc muszą znieść dowolne wejście. */
-export function parseWidok(raw: string | string[] | undefined): Widok {
-  return WIDOKI.find((widok) => widok === raw) ?? "nowe";
+/** Tab and filter live in the URL (ADR-0003), so they must survive any input. */
+export function parseView(raw: string | string[] | undefined): View {
+  return VIEWS.find((view) => view === raw) ?? "new";
 }
 
-export function parseTemat(raw: string | string[] | undefined): Temat | null {
-  return TEMATY.find((temat) => temat === raw) ?? null;
+export function parseTopic(raw: string | string[] | undefined): Topic | null {
+  return TOPICS.find((topic) => topic === raw) ?? null;
 }
 
 export interface NewsItem {
@@ -70,21 +70,21 @@ export interface NewsItem {
   publishedAt: string | null;
   sourceName: string;
   readAt: string | null;
-  /** Znacznik dodania do ulubionych; `null` = bez gwiazdki (migracja 006). */
+  /** When the item was starred; `null` = no star (migration 006). */
   starredAt: string | null;
   /**
-   * Data, po której wpis jest sortowany i po której grupuje go skrzynka:
-   * publikacja, a w jej braku moment zapisu. Wyliczana w bazie, żeby widok
-   * nie musiał powtarzać tej samej reguły co `ORDER BY`.
+   * The date the item is sorted and grouped by: publication date, falling back
+   * to the moment it was stored. Computed in the database so the view does not
+   * have to repeat the rule used by `ORDER BY`.
    */
   recency: string;
 }
 
 /**
- * Kształt wiersza tak, jak faktycznie zwraca go sterownik — nie tak, jak
- * wygląda w SQL-u. Dwie pułapki: BIGINT przychodzi jako string, a TIMESTAMPTZ
- * jako obiekt `Date`. Oba normalizujemy w `toItem`, żeby `NewsItem` był tym,
- * co deklaruje, i żeby nic dalej nie musiało o tym pamiętać.
+ * The row shape as the driver actually returns it — not as it looks in SQL.
+ * Two traps: BIGINT arrives as a string and TIMESTAMPTZ as a `Date` object.
+ * Both are normalised in `toItem` so `NewsItem` is what it claims to be and
+ * nothing downstream has to remember this.
  */
 interface ItemRow {
   id: string;
@@ -125,74 +125,74 @@ function toItem(row: ItemRow): NewsItem {
 }
 
 /**
- * Kolejność skrzynki. Do migracji 005 było tu samo `created_at`, czyli moment
- * zapisu przez agenta — w obrębie jednego przebiegu identyczny dla wszystkich
- * wpisów, więc realną kolejnością była kolejność odpytywania źródeł i tygodniowy
- * wpis potrafił wylądować nad dzisiejszym. Indeksy z 005 są zbudowane dokładnie
- * na tym wyrażeniu.
+ * Inbox ordering. Until migration 005 this was plain `created_at`, the moment
+ * the agent stored the item — identical for every item within a single run, so
+ * the real ordering was the order sources happened to be polled and a week-old
+ * post could land above today's. The indexes from 005 are built on exactly
+ * this expression.
  */
 const RECENCY = "COALESCE(i.published_at, i.created_at)";
 
 /**
- * Warunki wspólne dla wszystkich widoków, jako sparametryzowany SQL.
- * Zwracany `where` trafia do zapytania przez interpolację — ale składają się
- * na niego wyłącznie nasze własne literały, a wszystkie wartości od użytkownika
- * idą przez `params`.
+ * Conditions shared by every view, as parameterised SQL.
+ * The returned `where` is interpolated into the query — but it is built purely
+ * from our own literals, while every user-supplied value goes through `params`.
  */
-function budujWarunki(filtr: Filtr): { where: string; params: unknown[] } {
+function buildConditions(filter: Filter): { where: string; params: unknown[] } {
   const params: unknown[] = [MIN_RELEVANCE];
-  const czesci = ["i.deleted_at IS NULL", "i.relevance_score >= $1"];
+  const parts = ["i.deleted_at IS NULL", "i.relevance_score >= $1"];
 
-  if (filtr.widok === "nowe") czesci.push("i.read_at IS NULL");
-  if (filtr.widok === "przeczytane") czesci.push("i.read_at IS NOT NULL");
-  // Ulubione są prostopadłe do stanu przeczytania — zakładka pokazuje je
-  // niezależnie od tego, czy wpis został odhaczony.
-  if (filtr.widok === "ulubione") czesci.push("i.starred_at IS NOT NULL");
+  if (filter.view === "new") parts.push("i.read_at IS NULL");
+  if (filter.view === "read") parts.push("i.read_at IS NOT NULL");
+  // Starring is orthogonal to read state — the tab shows starred items
+  // whether or not they have been marked read.
+  if (filter.view === "starred") parts.push("i.starred_at IS NOT NULL");
 
-  if (filtr.temat) {
-    params.push([filtr.temat]);
-    // `&&` = przecięcie tablic; korzysta z indeksu GIN z migracji 002.
-    czesci.push(`i.topics && $${params.length}::text[]`);
+  if (filter.topic) {
+    params.push([filter.topic]);
+    // `&&` = array overlap; uses the GIN index from migration 002.
+    parts.push(`i.topics && $${params.length}::text[]`);
   }
 
-  return { where: czesci.join(" AND "), params };
+  return { where: parts.join(" AND "), params };
 }
 
-/** Ile wpisów mieści jedna strona skrzynki. */
-export const ROZMIAR_STRONY = 30;
+/** How many items fit on one inbox page. */
+export const PAGE_SIZE = 30;
 
-/** Numer strony z adresu; musi znieść dowolne wejście, bo to parametr URL-a. */
-export function parseStrona(raw: string | string[] | undefined): number {
-  const liczba = Number(Array.isArray(raw) ? raw[0] : raw);
-  return Number.isInteger(liczba) && liczba > 1 ? liczba : 1;
+/** Page number from the address; must survive any input, being a URL param. */
+export function parsePage(raw: string | string[] | undefined): number {
+  const value = Number(Array.isArray(raw) ? raw[0] : raw);
+  return Number.isInteger(value) && value > 1 ? value : 1;
 }
 
-export interface Strona {
-  wpisy: NewsItem[];
-  /** Czy za tą stroną są jeszcze starsze wpisy. */
-  jestWiecej: boolean;
+export interface Page {
+  items: NewsItem[];
+  /** Whether older items exist beyond this page. */
+  hasMore: boolean;
 }
 
 /**
- * Jedna strona skrzynki.
+ * One page of the inbox.
  *
- * Klasyczne strony przez OFFSET, a nie doładowywanie rosnącym limitem: archiwum
- * przyrasta o kilkanaście wpisów co dwa dni i nie ma górnej granicy, więc rosnący
- * limit prędzej czy później zaczyna ciągnąć setki rekordów na jedno żądanie.
- * Tutaj rozmiar odpowiedzi jest stały niezależnie od tego, jak głęboko sięgamy.
+ * Classic OFFSET pages rather than loading more with a growing limit: the
+ * archive grows by a dozen or so items every two days with no upper bound, so
+ * a growing limit sooner or later drags hundreds of rows per request. Here the
+ * response size stays constant no matter how deep we reach.
  *
- * Świadomy kompromis: przy OFFSET granice stron przesuwają się, gdy wpis zmieni
- * przynależność do zakładki (odhaczenie, usunięcie). Kursor by tego uniknął, ale
- * odebrałby możliwość skoku na konkretną stronę — a to jest sedno paginacji.
+ * A deliberate trade-off: with OFFSET, page boundaries shift when an item
+ * changes which tab it belongs to (unmarking, deleting). A cursor would avoid
+ * that but would remove the ability to jump to a specific page — which is the
+ * whole point of pagination.
  */
-export async function listItems(filtr: Filtr, strona = 1): Promise<Strona> {
-  const { where, params } = budujWarunki(filtr);
+export async function listItems(filter: Filter, page = 1): Promise<Page> {
+  const { where, params } = buildConditions(filter);
 
-  // Jeden wiersz ponad stronę: tanie i dokładne "czy jest ciąg dalszy",
-  // niezależne od licznika z osobnego zapytania.
-  params.push(ROZMIAR_STRONY + 1);
+  // One row beyond the page: a cheap and exact "is there more", independent of
+  // a count from a separate query.
+  params.push(PAGE_SIZE + 1);
   const limitParam = params.length;
-  params.push((strona - 1) * ROZMIAR_STRONY);
+  params.push((page - 1) * PAGE_SIZE);
 
   const rows = (await sql().query(
     `SELECT
@@ -208,35 +208,35 @@ export async function listItems(filtr: Filtr, strona = 1): Promise<Strona> {
   )) as ItemRow[];
 
   return {
-    wpisy: rows.slice(0, ROZMIAR_STRONY).map(toItem),
-    jestWiecej: rows.length > ROZMIAR_STRONY,
+    items: rows.slice(0, PAGE_SIZE).map(toItem),
+    hasMore: rows.length > PAGE_SIZE,
   };
 }
 
 /**
- * Liczniki przy zakładkach. Respektują aktywny filtr tematu — inaczej zakładka
- * obiecywałaby wpisy, których po zawężeniu i tak nie widać.
+ * Counts next to the tabs. They respect the active topic filter — otherwise a
+ * tab would promise items that are not visible once narrowed down.
  */
-export async function liczniki(temat: Temat | null): Promise<Record<Widok, number>> {
-  const { where, params } = budujWarunki({ widok: "wszystkie", temat });
+export async function counts(topic: Topic | null): Promise<Record<View, number>> {
+  const { where, params } = buildConditions({ view: "all", topic });
 
   const rows = (await sql().query(
     `SELECT
-       COUNT(*) FILTER (WHERE i.read_at IS NULL)::int        AS nowe,
-       COUNT(*) FILTER (WHERE i.starred_at IS NOT NULL)::int AS ulubione,
-       COUNT(*) FILTER (WHERE i.read_at IS NOT NULL)::int    AS przeczytane,
-       COUNT(*)::int                                         AS wszystkie
+       COUNT(*) FILTER (WHERE i.read_at IS NULL)::int        AS "new",
+       COUNT(*) FILTER (WHERE i.starred_at IS NOT NULL)::int AS "starred",
+       COUNT(*) FILTER (WHERE i.read_at IS NOT NULL)::int    AS "read",
+       COUNT(*)::int                                         AS "all"
      FROM items i
      WHERE ${where}`,
     params,
-  )) as Record<Widok, number>[];
+  )) as Record<View, number>[];
 
-  return rows[0] ?? { nowe: 0, ulubione: 0, przeczytane: 0, wszystkie: 0 };
+  return rows[0] ?? { new: 0, starred: 0, read: 0, all: 0 };
 }
 
 /**
- * Liczba nieprzeczytanych bez zawężenia do kategorii — to ona ląduje na badge'u
- * ikony PWA, więc musi opisywać całą skrzynkę, nie bieżący widok.
+ * Unread count without any category filter — this is what ends up on the PWA
+ * icon badge, so it has to describe the whole inbox, not the current view.
  */
 export async function countUnread(): Promise<number> {
   const rows = (await sql()`
@@ -250,16 +250,16 @@ export async function countUnread(): Promise<number> {
 }
 
 /* ---------------------------------------------------------------------------
- * Zapisy. Trzymane tutaj razem z odczytami, bo dzielą z nimi te same warunki
- * (`deleted_at IS NULL`, próg trafności) — rozdzielone rozjechałyby się przy
- * pierwszej zmianie progu.
+ * Writes. Kept here next to the reads because they share the same conditions
+ * (`deleted_at IS NULL`, the relevance threshold) — split apart they would
+ * drift the first time the threshold changed.
  * ------------------------------------------------------------------------ */
 
 /**
- * Id przychodzą z JSON-a jako liczby, ale kolumna to BIGINT i sterownik Neona
- * serializuje bigint do stringa — porównanie musi być tekstowe.
+ * Ids arrive from JSON as numbers, but the column is BIGINT and the Neon
+ * driver serialises bigint to a string — the comparison has to be textual.
  */
-function jakoTekst(ids: number[]): string[] {
+function asText(ids: number[]): string[] {
   return ids.map(String);
 }
 
@@ -270,17 +270,17 @@ export async function markRead(ids: number[]): Promise<void> {
     UPDATE items SET read_at = NOW()
     WHERE read_at IS NULL
       AND deleted_at IS NULL
-      AND id = ANY(${jakoTekst(ids)})
+      AND id = ANY(${asText(ids)})
   `;
 }
 
 /**
- * „Oznacz wszystkie" zawężone do aktywnej kategorii. Bez tego zawężenia
- * przycisk widoczny przy odfiltrowanym widoku czyściłby także wpisy,
- * których użytkownik w tym momencie nie widzi.
+ * "Mark all" narrowed to the active category. Without that narrowing, a button
+ * shown on a filtered view would also clear items the user cannot see at that
+ * moment.
  */
-export async function markAllRead(temat: Temat | null): Promise<void> {
-  if (temat === null) {
+export async function markAllRead(topic: Topic | null): Promise<void> {
+  if (topic === null) {
     await sql()`
       UPDATE items SET read_at = NOW()
       WHERE read_at IS NULL
@@ -295,34 +295,34 @@ export async function markAllRead(temat: Temat | null): Promise<void> {
     WHERE read_at IS NULL
       AND deleted_at IS NULL
       AND relevance_score >= ${MIN_RELEVANCE}
-      AND topics && ${[temat]}::text[]
+      AND topics && ${[topic]}::text[]
   `;
 }
 
 /**
- * Miękkie usunięcie (ADR-0003). Wiersz zostaje w tabeli, bo `items.url` z UNIQUE
- * to jedyna ochrona przed ponownym pobraniem artykułu przez agenta — twarde
- * DELETE sprawiłoby, że wpis wróci przy najbliższym przebiegu razem
- * z powiadomieniem.
+ * Soft delete (ADR-0003). The row stays in the table because `items.url` with
+ * its UNIQUE constraint is the only protection against the agent fetching the
+ * article again — a hard DELETE would bring the item back on the next run,
+ * notification included.
  *
- * Warunek `deleted_at IS NULL` czyni operację idempotentną: powtórzone żądanie
- * nie przesunie znacznika i nie zepsuje cofnięcia.
+ * The `deleted_at IS NULL` condition makes the operation idempotent: a repeated
+ * request will not move the timestamp and break the undo.
  */
 export async function softDelete(ids: number[]): Promise<void> {
   if (ids.length === 0) return;
 
   await sql()`
     UPDATE items SET deleted_at = NOW()
-    WHERE deleted_at IS NULL AND id = ANY(${jakoTekst(ids)})
+    WHERE deleted_at IS NULL AND id = ANY(${asText(ids)})
   `;
 }
 
 /**
- * Cofnięcie odhaczenia — wpis wraca do „Nowych".
+ * Undo marking as read — the item goes back to "New".
  *
- * Bez tego stan przeczytania był jednokierunkowy: pomyłkowe kliknięcie dało się
- * odwrócić tylko przez bazę. Warunek `read_at IS NOT NULL` czyni operację
- * idempotentną.
+ * Without this the read state was one-way: a mistaken click could only be
+ * reverted through the database. The `read_at IS NOT NULL` condition makes the
+ * operation idempotent.
  */
 export async function markUnread(ids: number[]): Promise<void> {
   if (ids.length === 0) return;
@@ -331,49 +331,50 @@ export async function markUnread(ids: number[]): Promise<void> {
     UPDATE items SET read_at = NULL
     WHERE read_at IS NOT NULL
       AND deleted_at IS NULL
-      AND id = ANY(${jakoTekst(ids)})
+      AND id = ANY(${asText(ids)})
   `;
 }
 
 /**
- * Gwiazdka (migracja 006). Ulubione są **prostopadłe** do stanu przeczytania —
- * ta operacja nie rusza `read_at`, a odhaczenie nie rusza gwiazdki.
+ * The star (migration 006). Starring is **orthogonal** to read state — this
+ * operation never touches `read_at`, and marking as read never touches the star.
  */
-export async function setStarred(ids: number[], gwiazdka: boolean): Promise<void> {
+export async function setStarred(ids: number[], starred: boolean): Promise<void> {
   if (ids.length === 0) return;
 
-  if (gwiazdka) {
+  if (starred) {
     await sql()`
       UPDATE items SET starred_at = NOW()
       WHERE starred_at IS NULL
         AND deleted_at IS NULL
-        AND id = ANY(${jakoTekst(ids)})
+        AND id = ANY(${asText(ids)})
     `;
     return;
   }
 
   await sql()`
     UPDATE items SET starred_at = NULL
-    WHERE id = ANY(${jakoTekst(ids)})
+    WHERE id = ANY(${asText(ids)})
   `;
 }
 
-/** Cofnięcie usunięcia — obsługuje „Cofnij" w toaście po akcji. */
+/** Undo a delete — backs the "Cofnij" action in the toast. */
 export async function restore(ids: number[]): Promise<void> {
   if (ids.length === 0) return;
 
   await sql()`
     UPDATE items SET deleted_at = NULL
-    WHERE id = ANY(${jakoTekst(ids)})
+    WHERE id = ANY(${asText(ids)})
   `;
 }
 
 /**
- * Liczba skonfigurowanych źródeł — do paska faktów w hero.
+ * Number of configured sources — for the facts strip in the hero.
  *
- * Czytana z bazy, a nie wpisana w tekst: tabelę `sources` synchronizuje agent
- * przy każdym przebiegu z `packages/agent/config/sources.json`, więc dopisanie
- * źródła aktualizuje nagłówek samo. Literał w JSX rozjechałby się po cichu.
+ * Read from the database rather than written into the copy: the agent syncs the
+ * `sources` table from `packages/agent/config/sources.json` on every run, so
+ * adding a source updates the header by itself. A literal in JSX would drift
+ * silently.
  */
 export async function countSources(): Promise<number> {
   const rows = (await sql()`SELECT COUNT(*)::int AS n FROM sources`) as { n: number }[];

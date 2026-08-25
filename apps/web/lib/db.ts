@@ -1,11 +1,11 @@
 import { neon } from "@neondatabase/serverless";
 
 /**
- * Klient Neona po stronie serwera Next.js. Używany wyłącznie przez route
- * handlery — nigdy w komponentach klienckich.
+ * The Neon client on the Next.js server. Used exclusively by route handlers —
+ * never in client components.
  *
- * Tworzony leniwie, żeby brak `DATABASE_URL` wywalał się dopiero przy
- * faktycznym zapytaniu, a nie przy imporcie modułu (co psułoby build).
+ * Created lazily so a missing `DATABASE_URL` blows up on the first actual query
+ * rather than at module import (which would break the build).
  */
 let client: ReturnType<typeof neon> | null = null;
 
@@ -13,7 +13,7 @@ export function sql() {
   if (!client) {
     const url = process.env.DATABASE_URL;
     if (!url) {
-      throw new Error("Brak zmiennej środowiskowej DATABASE_URL");
+      throw new Error("Missing DATABASE_URL environment variable");
     }
     client = neon(url);
   }

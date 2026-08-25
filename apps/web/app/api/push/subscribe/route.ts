@@ -3,13 +3,13 @@ import { z } from "zod";
 
 import { sql } from "@/lib/db";
 
-/** Route czyta bazę przy każdym żądaniu — nic tu nie ma do prerenderowania. */
+/** The route reads the database on every request — nothing here to prerender. */
 export const dynamic = "force-dynamic";
 
 /**
- * Kształt zwracany przez `PushSubscription.toJSON()` w przeglądarce.
- * Walidujemy go, bo endpoint jest publiczny — do bazy nie może trafić
- * cokolwiek, co ktoś wyśle POST-em.
+ * The shape returned by `PushSubscription.toJSON()` in the browser.
+ * We validate it because the endpoint is public — the database must not receive
+ * whatever anyone happens to POST.
  */
 const SubscriptionSchema = z.object({
   endpoint: z.url().max(2048),
@@ -25,55 +25,52 @@ export async function POST(request: Request) {
   try {
     body = await request.json();
   } catch {
-    return NextResponse.json({ error: "Nieprawidłowy JSON" }, { status: 400 });
+    return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
   const parsed = SubscriptionSchema.safeParse(body);
   if (!parsed.success) {
-    return NextResponse.json(
-      { error: "Nieprawidłowy kształt subskrypcji" },
-      { status: 400 },
-    );
+    return NextResponse.json({ error: "Invalid subscription shape" }, { status: 400 });
   }
 
   const { endpoint, keys } = parsed.data;
 
   try {
-    // Ta sama przeglądarka po ponownym udzieleniu zgody przysyła ten sam
-    // endpoint — odświeżamy klucze zamiast mnożyć wiersze.
+    // The same browser re-granting permission sends the same endpoint — we
+    // refresh the keys instead of multiplying rows.
     await sql()`
       INSERT INTO push_subscriptions (endpoint, keys_json)
       VALUES (${endpoint}, ${JSON.stringify(keys)}::jsonb)
       ON CONFLICT (endpoint) DO UPDATE SET keys_json = EXCLUDED.keys_json
     `;
   } catch (error: unknown) {
-    console.error("[api/push/subscribe] zapis nieudany", error);
-    return NextResponse.json({ error: "Zapis nieudany" }, { status: 500 });
+    console.error("[api/push/subscribe] write failed", error);
+    return NextResponse.json({ error: "Write failed" }, { status: 500 });
   }
 
   return NextResponse.json({ ok: true }, { status: 201 });
 }
 
-/** Wypisanie się — przeglądarka woła to po `unsubscribe()`. */
+/** Unsubscribing — the browser calls this after `unsubscribe()`. */
 export async function DELETE(request: Request) {
   let body: unknown;
 
   try {
     body = await request.json();
   } catch {
-    return NextResponse.json({ error: "Nieprawidłowy JSON" }, { status: 400 });
+    return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
   const parsed = z.object({ endpoint: z.url().max(2048) }).safeParse(body);
   if (!parsed.success) {
-    return NextResponse.json({ error: "Brak endpointu" }, { status: 400 });
+    return NextResponse.json({ error: "Missing endpoint" }, { status: 400 });
   }
 
   try {
     await sql()`DELETE FROM push_subscriptions WHERE endpoint = ${parsed.data.endpoint}`;
   } catch (error: unknown) {
-    console.error("[api/push/subscribe] usunięcie nieudane", error);
-    return NextResponse.json({ error: "Usunięcie nieudane" }, { status: 500 });
+    console.error("[api/push/subscribe] delete failed", error);
+    return NextResponse.json({ error: "Delete failed" }, { status: 500 });
   }
 
   return NextResponse.json({ ok: true });

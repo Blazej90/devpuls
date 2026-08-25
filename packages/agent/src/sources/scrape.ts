@@ -6,7 +6,7 @@ import { MAX_ITEMS_PER_SOURCE } from "@/config.js";
 import { noteError } from "@/monitor.js";
 import type { NormalizedItem, SourceConfig } from "@/types.js";
 
-/** Ile znaków HTML wysyłamy do modelu — strony indeksowe bywają ogromne. */
+/** How many HTML characters we send to the model — index pages can be huge. */
 const MAX_HTML_CHARS = 120_000;
 
 const ScrapedEntries = z.object({
@@ -22,7 +22,7 @@ const ScrapedEntries = z.object({
   ),
 });
 
-/** Usuwa to, co i tak nie niesie treści — skrypty, style, komentarze. */
+/** Strips what carries no content anyway — scripts, styles, comments. */
 function stripNoise(html: string): string {
   return html
     .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, "")
@@ -33,9 +33,9 @@ function stripNoise(html: string): string {
 }
 
 /**
- * Źródła bez RSS (np. Anthropic News). Zamiast dedykowanego parsera HTML
- * — który psuje się przy każdym redesignie — prosimy Claude o listę wpisów
- * jako ustrukturyzowany JSON (patrz CLAUDE.md, sekcja "Źródła danych agenta").
+ * Sources without RSS (e.g. Anthropic News). Instead of a dedicated HTML parser
+ * — which breaks with every redesign — we ask Claude for the list of items as
+ * structured JSON (see CLAUDE.md, the "Źródła danych agenta" section).
  */
 export async function fetchScrape(
   source: SourceConfig,
@@ -45,22 +45,23 @@ export async function fetchScrape(
   });
 
   if (!response.ok) {
-    throw new Error(`${source.id}: HTTP ${response.status} z ${source.url}`);
+    throw new Error(`${source.id}: HTTP ${response.status} from ${source.url}`);
   }
 
   const cleaned = stripNoise(await response.text());
   if (cleaned.length > MAX_HTML_CHARS) {
     console.warn(
-      `[${source.id}] HTML ma ${cleaned.length} znaków — przycinam do ${MAX_HTML_CHARS}. ` +
-        `Część starszych wpisów z tej strony może zostać pominięta w tym przebiegu.`,
+      `[${source.id}] the HTML is ${cleaned.length} characters — truncating to ${MAX_HTML_CHARS}. ` +
+        `Some older items from this page may be skipped in this run.`,
     );
   }
 
   const parsed = await getAnthropic().messages.parse({
     model: MODEL,
     max_tokens: 4096,
-    // Bez `effort` — Haiku 4.5 odrzuca ten parametr błędem 400.
+    // No `effort` — Haiku 4.5 rejects that parameter with a 400.
     output_config: { format: zodOutputFormat(ScrapedEntries) },
+    // The prompt stays in Polish, like the rest of the model-facing copy.
     system:
       "Wyciągasz listę wpisów blogowych/newsowych ze strony indeksowej. " +
       "Zwracaj wyłącznie wpisy faktycznie obecne w podanym HTML — nie zgaduj i nie dopisuj własnych. " +
@@ -75,8 +76,8 @@ export async function fetchScrape(
   });
 
   if (parsed.stop_reason === "refusal") {
-    console.warn(`[${source.id}] model odmówił przetworzenia strony — pomijam źródło`);
-    noteError("source", source.id, "model odmówił przetworzenia strony");
+    console.warn(`[${source.id}] the model refused to process the page — skipping source`);
+    noteError("source", source.id, "the model refused to process the page");
     return [];
   }
 

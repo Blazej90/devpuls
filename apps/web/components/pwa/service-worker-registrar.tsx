@@ -3,11 +3,11 @@
 import { useEffect } from "react";
 
 /**
- * Rejestruje `/sw.js`. Nic nie renderuje — wisi w layoucie, żeby worker
- * był aktywny niezależnie od podstrony.
+ * Registers `/sw.js`. Renders nothing — it hangs in the layout so the worker
+ * stays active regardless of the subpage.
  *
- * Rejestrujemy dopiero po `load`, żeby nie konkurować o pasmo z pierwszym
- * renderem.
+ * Registration waits for `load` so it does not compete for bandwidth with the
+ * first render.
  */
 export function ServiceWorkerRegistrar() {
   useEffect(() => {
@@ -15,7 +15,7 @@ export function ServiceWorkerRegistrar() {
 
     const register = () => {
       navigator.serviceWorker.register("/sw.js").catch((error: unknown) => {
-        console.error("[pwa] rejestracja service workera nieudana", error);
+        console.error("[pwa] service worker registration failed", error);
       });
     };
 

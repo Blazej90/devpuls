@@ -7,21 +7,21 @@ import { Monitor, Moon, Sun } from "lucide-react";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { cn } from "@/lib/utils";
 
-const OPCJE = [
-  { wartosc: "light", etykieta: "Jasny", Ikona: Sun },
-  { wartosc: "dark", etykieta: "Ciemny", Ikona: Moon },
-  { wartosc: "system", etykieta: "Systemowy", Ikona: Monitor },
+const OPTIONS = [
+  { value: "light", label: "Jasny", Icon: Sun },
+  { value: "dark", label: "Ciemny", Icon: Moon },
+  { value: "system", label: "Systemowy", Icon: Monitor },
 ] as const;
 
 /**
- * Czy jesteśmy już po stronie klienta.
+ * Whether we are on the client already.
  *
- * `useTheme()` na serwerze nie zna wybranego motywu — renderowanie go od razu
- * dałoby niezgodność hydratacji. `useSyncExternalStore` zamiast
- * `useState` + `useEffect`, bo ustawianie stanu w ciele efektu łamie regułę
- * `react-hooks`; ten sam wzorzec obsługuje prompt instalacji PWA.
+ * `useTheme()` does not know the selected theme on the server — rendering it
+ * straight away would cause a hydration mismatch. `useSyncExternalStore`
+ * instead of `useState` + `useEffect`, because setting state in an effect body
+ * breaks the `react-hooks` rule; the same pattern backs the PWA install prompt.
  */
-function useZamontowany(): boolean {
+function useMounted(): boolean {
   return useSyncExternalStore(
     () => () => {},
     () => true,
@@ -30,46 +30,47 @@ function useZamontowany(): boolean {
 }
 
 /**
- * Przełącznik motywu — trzy stany, nie dwa (ADR-0003).
+ * Theme switch — three states, not two (ADR-0003).
  *
- * „Systemowy" jest osobną opcją, a nie stanem startowym, który znika po
- * pierwszym kliknięciu: bez niego nie da się wrócić do podążania za ustawieniem
- * telefonu, a to jedyny tryb, który sam przełącza się wieczorem.
+ * "System" is a separate option rather than a starting state that vanishes on
+ * the first click: without it there is no way back to following the phone's
+ * setting, and that is the only mode that switches itself in the evening.
  *
- * Segment zamiast rozwijanego menu — trzy opcje mieszczą się w jednym rzędzie,
- * więc zmiana to jedno dotknięcie, a bieżący wybór widać bez otwierania.
+ * A segmented control instead of a dropdown — three options fit in one row, so
+ * changing it takes a single tap and the current choice is visible without
+ * opening anything.
  */
 export function ThemeToggle() {
   const { theme, setTheme } = useTheme();
-  const zamontowany = useZamontowany();
+  const mounted = useMounted();
 
   return (
     <ToggleGroup
       type="single"
-      // Przed hydratacją nic nie jest zaznaczone — inaczej serwer i klient
-      // wyrenderowałyby różne stany. Rozmiar kontrolki się nie zmienia,
-      // więc nic nie skacze.
-      value={zamontowany ? theme : ""}
-      onValueChange={(wartosc) => {
-        // Radix pozwala odznaczyć aktywny element; motyw musi zostać wybrany.
-        if (wartosc) setTheme(wartosc);
+      // Nothing is selected before hydration — otherwise the server and the
+      // client would render different states. The control does not change size,
+      // so nothing jumps.
+      value={mounted ? theme : ""}
+      onValueChange={(value) => {
+        // Radix allows deselecting the active item; a theme has to stay chosen.
+        if (value) setTheme(value);
       }}
       variant="outline"
       size="sm"
       aria-label="Motyw"
       className="gap-0"
     >
-      {OPCJE.map(({ wartosc, etykieta, Ikona }) => (
+      {OPTIONS.map(({ value, label, Icon }) => (
         <ToggleGroupItem
-          key={wartosc}
-          value={wartosc}
-          aria-label={etykieta}
-          title={etykieta}
-          // Domyślne `data-[state=on]:bg-accent` z shadcn to w trybie jasnym
-          // #f5f5f5 na białym tle — kontrast 1,08:1, czyli nie widać, który
-          // motyw jest wybrany. `primary` odwraca kolory i działa w obu
-          // motywach, tak samo jak aktywny próg trafności w ustawieniach.
-          // `-ml-px` skleja sąsiadujące ramki w jeden segment.
+          key={value}
+          value={value}
+          aria-label={label}
+          title={label}
+          // The shadcn default `data-[state=on]:bg-accent` is #f5f5f5 on white
+          // in light mode — a contrast of 1.08:1, i.e. you cannot tell which
+          // theme is selected. `primary` inverts the colours and works in both
+          // themes, the same as the active relevance threshold in settings.
+          // `-ml-px` welds adjacent borders into one segmented control.
           className={cn(
             "relative rounded-none border-input first:rounded-l-md last:rounded-r-md",
             "[&:not(:first-child)]:-ml-px",
@@ -77,7 +78,7 @@ export function ThemeToggle() {
             "data-[state=on]:bg-primary data-[state=on]:text-primary-foreground",
           )}
         >
-          <Ikona className="size-4" aria-hidden />
+          <Icon className="size-4" aria-hidden />
         </ToggleGroupItem>
       ))}
     </ToggleGroup>

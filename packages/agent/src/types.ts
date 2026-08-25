@@ -1,7 +1,7 @@
-/** Typ źródła — decyduje, który moduł z `src/sources/` je obsłuży. */
+/** Source type — decides which module from `src/sources/` handles it. */
 export type SourceType = "rss" | "atom" | "scrape";
 
-/** Wpis z `config/sources.json`. */
+/** An entry from `config/sources.json`. */
 export interface SourceConfig {
   id: string;
   name: string;
@@ -12,30 +12,30 @@ export interface SourceConfig {
 }
 
 /**
- * Znormalizowany wpis — każdy fetcher zwraca dokładnie ten kształt,
- * niezależnie od formatu wejściowego (RSS, Atom, HTML).
+ * A normalised item — every fetcher returns exactly this shape, regardless of
+ * the input format (RSS, Atom, HTML).
  */
 export interface NormalizedItem {
   sourceId: string;
   url: string;
   title: string;
-  /** ISO 8601. `null`, gdy źródło nie podaje daty. */
+  /** ISO 8601. `null` when the source gives no date. */
   publishedAt: string | null;
-  /** Lead/opis z feedu, jeśli jest — trafia do promptu jako kontekst. */
+  /** The lead/description from the feed, if any — goes into the prompt as context. */
   excerpt?: string;
 }
 
-/** Wynik oceny przez Claude — jedno wywołanie na wpis. */
+/** The result of Claude's assessment — one call per item. */
 export interface Assessment {
-  /** 1 = zupełnie nietrafione, 5 = must-read dla profilu zainteresowań. */
+  /** 1 = completely off target, 5 = must-read for this interest profile. */
   relevance: number;
-  /** Streszczenie po polsku, 2-3 zdania. */
+  /** A Polish summary, 2-3 sentences. */
   summaryPl: string;
-  /** Tematy rozpoznane przez model (typescript, react, ai, ...). */
+  /** Topics recognised by the model (typescript, react, ai, ...). */
   topics: string[];
 }
 
-/** Wpis gotowy do zapisu w bazie i wysyłki push. */
+/** An item ready to be stored in the database and pushed. */
 export interface AssessedItem extends NormalizedItem {
   assessment: Assessment;
 }

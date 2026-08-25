@@ -19,48 +19,48 @@ const TOPICS = [
   { id: "javascript", label: "JavaScript" },
   { id: "fullstack", label: "Fullstack" },
   { id: "ai", label: "AI" },
-  { id: "inne", label: "Inne" },
+  { id: "other", label: "Inne" },
 ] as const;
 
-const PROGI = [2, 3, 4, 5] as const;
+const THRESHOLDS = [2, 3, 4, 5] as const;
 
 /**
- * Ustawienia są zapisane przy subskrypcji, nie w localStorage — to agent
- * podejmuje decyzję o wysyłce i musi je widzieć po swojej stronie.
- * Komponent pokazuje się dopiero, gdy subskrypcja istnieje.
+ * The settings are stored with the subscription, not in localStorage — it is
+ * the agent that decides what to send and it has to see them on its side.
+ * The component only shows up once a subscription exists.
  */
 export function PushSettings() {
   const [endpoint, setEndpoint] = useState<string | null>(null);
   const [minRelevance, setMinRelevance] = useState(4);
   const [topics, setTopics] = useState<string[]>([]);
-  const [zapisywanie, setZapisywanie] = useState(false);
-  const [zapisano, setZapisano] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
 
   /**
-   * Lustro stanu w refach. Dwa kliknięcia w tym samym ticku Reacta czytałyby
-   * ten sam, nieodświeżony stan z domknięcia i drugie nadpisywałoby pierwsze
-   * (zaobserwowane: zaznaczenie kategorii gubiło poprzednią). Ref widzi
-   * zawsze bieżącą wartość.
+   * State mirrored in refs. Two clicks within the same React tick would read
+   * the same stale state from the closure and the second would overwrite the
+   * first (observed: selecting a category dropped the previous one). A ref
+   * always sees the current value.
    */
-  const progRef = useRef(4);
+  const thresholdRef = useRef(4);
   const topicsRef = useRef<string[]>([]);
 
   /**
-   * Kolejka zapisów. Kolejność dotarcia żądań HTTP nie jest gwarantowana —
-   * przy zimnym starcie Neona pierwszy PATCH potrafi dojść po drugim
-   * i nadpisać nowszy stan starszym. Łańcuch promise'ów wysyła je po kolei.
+   * The write queue. The arrival order of HTTP requests is not guaranteed —
+   * on a Neon cold start the first PATCH can land after the second and
+   * overwrite newer state with older. A promise chain sends them in order.
    */
-  const kolejka = useRef<Promise<void>>(Promise.resolve());
+  const queue = useRef<Promise<void>>(Promise.resolve());
 
   useEffect(() => {
-    let anulowane = false;
+    let cancelled = false;
 
-    const wczytaj = async () => {
+    const load = async () => {
       if (!("serviceWorker" in navigator)) return;
 
       const registration = await navigator.serviceWorker.ready;
       const subscription = await registration.pushManager.getSubscription();
-      if (!subscription || anulowane) return;
+      if (!subscription || cancelled) return;
 
       const response = await fetch("/api/push/settings", {
         method: "POST",
@@ -68,73 +68,73 @@ export function PushSettings() {
         body: JSON.stringify({ endpoint: subscription.endpoint }),
       });
 
-      if (!response.ok || anulowane) return;
+      if (!response.ok || cancelled) return;
 
-      const dane = (await response.json()) as {
+      const data = (await response.json()) as {
         minRelevance: number;
         topics: string[] | null;
       };
 
-      if (anulowane) return;
-      progRef.current = dane.minRelevance;
-      topicsRef.current = dane.topics ?? [];
+      if (cancelled) return;
+      thresholdRef.current = data.minRelevance;
+      topicsRef.current = data.topics ?? [];
       setEndpoint(subscription.endpoint);
-      setMinRelevance(dane.minRelevance);
-      setTopics(dane.topics ?? []);
+      setMinRelevance(data.minRelevance);
+      setTopics(data.topics ?? []);
     };
 
-    void wczytaj();
+    void load();
     return () => {
-      anulowane = true;
+      cancelled = true;
     };
   }, []);
 
-  const zapisz = useCallback(
-    (nowyProg: number, noweTopics: string[]) => {
+  const save = useCallback(
+    (nextThreshold: number, nextTopics: string[]) => {
       if (!endpoint) return;
 
-      setZapisywanie(true);
-      setZapisano(false);
+      setSaving(true);
+      setSaved(false);
 
-      kolejka.current = kolejka.current.then(async () => {
+      queue.current = queue.current.then(async () => {
         try {
           const response = await fetch("/api/push/settings", {
             method: "PATCH",
             headers: { "content-type": "application/json" },
             body: JSON.stringify({
               endpoint,
-              minRelevance: nowyProg,
-              // Pusta lista = brak filtra, tak samo interpretuje to endpoint.
-              topics: noweTopics.length > 0 ? noweTopics : null,
+              minRelevance: nextThreshold,
+              // An empty list = no filter, which is how the endpoint reads it too.
+              topics: nextTopics.length > 0 ? nextTopics : null,
             }),
           });
           if (!response.ok) throw new Error(`HTTP ${response.status}`);
-          setZapisano(true);
+          setSaved(true);
         } catch (error: unknown) {
-          console.error("[ustawienia] zapis nieudany", error);
+          console.error("[settings] write failed", error);
         } finally {
-          setZapisywanie(false);
+          setSaving(false);
         }
       });
     },
     [endpoint],
   );
 
-  const ustawProg = (prog: number) => {
-    progRef.current = prog;
-    setMinRelevance(prog);
-    zapisz(prog, topicsRef.current);
+  const setThreshold = (threshold: number) => {
+    thresholdRef.current = threshold;
+    setMinRelevance(threshold);
+    save(threshold, topicsRef.current);
   };
 
-  const przelaczTemat = (id: string) => {
-    const biezace = topicsRef.current;
-    const nowe = biezace.includes(id)
-      ? biezace.filter((topic) => topic !== id)
-      : [...biezace, id];
+  const toggleTopic = (id: string) => {
+    const current = topicsRef.current;
+    const next = current.includes(id)
+      ? current.filter((topic) => topic !== id)
+      : [...current, id];
 
-    topicsRef.current = nowe;
-    setTopics(nowe);
-    zapisz(progRef.current, nowe);
+    topicsRef.current = next;
+    setTopics(next);
+    save(thresholdRef.current, next);
   };
 
   if (!endpoint) return null;
@@ -153,14 +153,14 @@ export function PushSettings() {
         <div className="space-y-2">
           <p className="text-sm font-medium">Minimalna trafność</p>
           <div className="flex flex-wrap gap-2">
-            {PROGI.map((prog) => (
+            {THRESHOLDS.map((threshold) => (
               <Button
-                key={prog}
+                key={threshold}
                 size="sm"
-                variant={minRelevance === prog ? "default" : "outline"}
-                onClick={() => ustawProg(prog)}
+                variant={minRelevance === threshold ? "default" : "outline"}
+                onClick={() => setThreshold(threshold)}
               >
-                {prog}+
+                {threshold}+
               </Button>
             ))}
           </div>
@@ -173,15 +173,15 @@ export function PushSettings() {
           <p className="text-sm font-medium">Kategorie</p>
           <div className="flex flex-wrap gap-2">
             {TOPICS.map((topic) => {
-              const wybrany = topics.includes(topic.id);
+              const selected = topics.includes(topic.id);
               return (
                 <Button
                   key={topic.id}
                   size="sm"
-                  variant={wybrany ? "default" : "outline"}
-                  onClick={() => przelaczTemat(topic.id)}
+                  variant={selected ? "default" : "outline"}
+                  onClick={() => toggleTopic(topic.id)}
                 >
-                  {wybrany && <Check className="size-3.5" aria-hidden />}
+                  {selected && <Check className="size-3.5" aria-hidden />}
                   {topic.label}
                 </Button>
               );
@@ -197,10 +197,10 @@ export function PushSettings() {
         <p
           className={cn(
             "text-xs transition-opacity",
-            zapisywanie || zapisano ? "opacity-100" : "opacity-0",
+            saving || saved ? "opacity-100" : "opacity-0",
           )}
         >
-          {zapisywanie ? "Zapisuję…" : "Zapisano."}
+          {saving ? "Zapisuję…" : "Zapisano."}
         </p>
       </CardContent>
     </Card>

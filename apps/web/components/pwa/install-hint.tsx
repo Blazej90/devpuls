@@ -23,16 +23,15 @@ type Platform = "standalone" | "ios" | "other";
 function isStandalone(): boolean {
   return (
     window.matchMedia("(display-mode: standalone)").matches ||
-    // Safari na iOS nie wspiera display-mode i wystawia własną flagę.
+    // Safari on iOS does not support display-mode and exposes its own flag.
     ("standalone" in navigator && navigator.standalone === true)
   );
 }
 
 /**
- * Platforma nie zmienia się w trakcie życia strony, ale zależy od API
- * przeglądarki, więc na serwerze jej nie znamy. `useSyncExternalStore`
- * obsługuje dokładnie ten przypadek — bez setState w efekcie i bez
- * niezgodności przy hydratacji.
+ * The platform does not change during the life of the page, but it depends on
+ * browser APIs, so it is unknown on the server. `useSyncExternalStore` covers
+ * exactly this case — no setState in an effect and no hydration mismatch.
  */
 const noopSubscribe = () => () => {};
 
@@ -45,11 +44,11 @@ function getPlatform(): Platform {
 const getServerPlatform = (): Platform => "other";
 
 /**
- * Na iOS powiadomienia Web Push działają **wyłącznie** po dodaniu appki do
- * ekranu głównego (Safari 16.4+) — patrz ADR-0001. Tam pokazujemy instrukcję,
- * bo Apple nie daje żadnego programowego promptu.
+ * On iOS, Web Push works **only** once the app has been added to the home
+ * screen (Safari 16.4+) — see ADR-0001. There we show instructions, because
+ * Apple offers no programmatic prompt.
  *
- * Na Androidzie/desktopie korzystamy z przechwyconego `beforeinstallprompt`.
+ * On Android/desktop we use the captured `beforeinstallprompt`.
  */
 export function InstallHint() {
   const platform = useSyncExternalStore(noopSubscribe, getPlatform, getServerPlatform);
@@ -91,8 +90,8 @@ export function InstallHint() {
     );
   }
 
-  // Brak przechwyconego zdarzenia = przeglądarka albo już zainstalowała appkę,
-  // albo nie spełnia kryteriów instalowalności. Nie ma czego pokazywać.
+  // No captured event = the browser has either installed the app already or
+  // does not meet the installability criteria. There is nothing to show.
   if (!deferred) return null;
 
   return (

@@ -1,14 +1,14 @@
 /**
- * `beforeinstallprompt` leci raz, zaraz po załadowaniu strony — zanim React
- * zdąży się zhydratować. Listener dodany w `useEffect` regularnie go przegapia,
- * przez co przycisk instalacji nigdy się nie pojawia.
+ * `beforeinstallprompt` fires once, right after the page loads — before React
+ * has hydrated. A listener added in `useEffect` regularly misses it, so the
+ * install button never appears.
  *
- * Dlatego zdarzenie łapie skrypt wstrzykiwany przed hydratacją (patrz
- * `INSTALL_PROMPT_BOOTSTRAP` w layoucie), odkłada je na `window`, a komponent
- * czyta stąd przez `useSyncExternalStore`.
+ * That is why the event is caught by a script injected before hydration (see
+ * `INSTALL_PROMPT_BOOTSTRAP` in the layout), stashed on `window`, and read from
+ * here by the component through `useSyncExternalStore`.
  */
 
-/** Zdarzenie Chrome/Edge — nie ma go w lib.dom.d.ts. */
+/** A Chrome/Edge event — not present in lib.dom.d.ts. */
 export interface BeforeInstallPromptEvent extends Event {
   prompt: () => Promise<void>;
   userChoice: Promise<{ outcome: "accepted" | "dismissed" }>;
@@ -23,8 +23,8 @@ declare global {
 export const INSTALL_PROMPT_EVENT = "devpuls:installprompt";
 
 /**
- * Skrypt uruchamiany przed hydratacją. Trzymany jako string, bo musi trafić
- * do dokumentu wcześniej niż jakikolwiek bundle Reacta.
+ * The script that runs before hydration. Kept as a string, because it has to
+ * reach the document earlier than any React bundle.
  */
 export const INSTALL_PROMPT_BOOTSTRAP = `
 window.__devpulsInstallPrompt = null;
@@ -46,7 +46,7 @@ export function getInstallPrompt(): BeforeInstallPromptEvent | null {
 
 export const getServerInstallPrompt = (): BeforeInstallPromptEvent | null => null;
 
-/** Zdarzenia można użyć tylko raz — po wywołaniu czyścimy magazyn. */
+/** The event can only be used once — we clear the store after calling it. */
 export function consumeInstallPrompt(): void {
   window.__devpulsInstallPrompt = null;
   window.dispatchEvent(new Event(INSTALL_PROMPT_EVENT));

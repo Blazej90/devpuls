@@ -39,6 +39,18 @@ dostarcza je jako powiadomienia Web Push wraz z linkiem do oryginalnego źródł
 7. Przed rozpoczęciem pracy odczytaj `TODO.md` i zaznacz `[~]` przy etapie, nad którym
    pracujesz.
 8. Po zakończeniu etapu zaktualizuj `TODO.md` na `[x]` — bez commitowania (patrz zasada 1).
+9. **Kod jest po angielsku — nazwy plików i ich wnętrze.**
+   - Pliki i katalogi: też segmenty tras (`app/about`, nie `app/o-aplikacji`), migracje
+     SQL i pliki ADR. Nazwa ma jasno mówić, o którą część projektu chodzi
+     (`inbox-filters.tsx`, `scroll-to-top.tsx`, `date-groups.ts`).
+   - Wewnątrz plików po angielsku: identyfikatory, komentarze, logi do konsoli,
+     komunikaty błędów w odpowiedziach API, klucze i wartości w JSON-ie żądań, nazwy
+     i wartości parametrów URL (`?view=new&topic=react`).
+   - Po polsku zostaje **treść produktu**: teksty widoczne w UI, opisy w `manifest.json`,
+     prompty do Claude (bo generują polskie streszczenia), podsumowanie przebiegu
+     w GitHub Actions oraz dokumentacja w `docs/`, `TODO.md` i tym pliku.
+   - Etykiety UI trzymamy w mapach o angielskich kluczach (`TOPIC_LABELS`,
+     `VIEW_LABELS`, `BUCKET_LABELS`) — dzięki temu polski tekst nie wycieka do logiki.
 
 ## Workflow: sesje brainstormingowe → ADR
 

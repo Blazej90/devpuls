@@ -2,7 +2,7 @@ import type { SourceConfig } from "@/types.js";
 
 const USER_AGENT = "DevPuls/0.1 (+https://github.com/Blazej90/devpuls)";
 
-/** Ile razy ponawiamy po 429/5xx, zanim uznamy źródło za nieudane. */
+/** How many times we retry after 429/5xx before declaring the source failed. */
 const MAX_ATTEMPTS = 3;
 
 function sleep(ms: number): Promise<void> {
@@ -10,11 +10,11 @@ function sleep(ms: number): Promise<void> {
 }
 
 /**
- * Pobiera feed z ponowieniem przy 429 i 5xx. Reddit potrafi odbić kilka
- * równoległych żądań, a `Promise.allSettled` w pipeline uderza we wszystkie
- * źródła naraz — bez retry tracimy je na cały przebieg.
+ * Fetches a feed, retrying on 429 and 5xx. Reddit can bounce several parallel
+ * requests, and `Promise.allSettled` in the pipeline hits every source at once
+ * — without a retry we lose them for the whole run.
  *
- * Honorujemy nagłówek Retry-After, gdy jest; inaczej backoff 1s, 2s, 4s.
+ * We honour the Retry-After header when present; otherwise a 1s, 2s, 4s backoff.
  */
 export async function fetchFeedText(source: SourceConfig): Promise<string> {
   let lastStatus = 0;
@@ -37,11 +37,11 @@ export async function fetchFeedText(source: SourceConfig): Promise<string> {
       : 2 ** (attempt - 1) * 1000;
 
     console.warn(
-      `[${source.id}] HTTP ${response.status}, ponawiam za ${delayMs}ms ` +
-        `(próba ${attempt + 1}/${MAX_ATTEMPTS})`,
+      `[${source.id}] HTTP ${response.status}, retrying in ${delayMs}ms ` +
+        `(attempt ${attempt + 1}/${MAX_ATTEMPTS})`,
     );
     await sleep(delayMs);
   }
 
-  throw new Error(`${source.id}: HTTP ${lastStatus} z ${source.url}`);
+  throw new Error(`${source.id}: HTTP ${lastStatus} from ${source.url}`);
 }

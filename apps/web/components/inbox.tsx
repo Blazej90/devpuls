@@ -10,63 +10,64 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
-import { formatujDate, pogrupuj } from "@/lib/grupowanie";
-import { ETYKIETY_TEMATOW, type NewsItem, type Temat, type Widok } from "@/lib/items";
+import { formatDate, groupByDate } from "@/lib/date-groups";
+import { TOPIC_LABELS, type NewsItem, type Topic, type View } from "@/lib/items";
 
-type Trasa = "/api/items/read" | "/api/items/delete" | "/api/items/star";
+type Route = "/api/items/read" | "/api/items/delete" | "/api/items/star";
 
-/** Wszystkie trasy zapisu zwracają aktualny licznik nieprzeczytanych. */
-async function wyslij(trasa: Trasa, body: unknown): Promise<number> {
-  const response = await fetch(trasa, {
+/** Every write route responds with the current unread count. */
+async function send(route: Route, body: unknown): Promise<number> {
+  const response = await fetch(route, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(body),
   });
 
-  // Rzucamy zamiast zwracać null: optymistyczny UI już ukrył kartę, więc cicha
-  // porażka wygląda jak sukces. Tak właśnie przez chwilę wyglądał błąd
-  // z bigintami — zapis nie przechodził, a interfejs nic nie mówił.
-  if (!response.ok) throw new Error(`Zapis nieudany (HTTP ${response.status})`);
+  // Throw instead of returning null: the optimistic UI has already hidden the
+  // card, so a silent failure looks like success. That is exactly how the
+  // bigint bug looked for a while — the write never landed and the interface
+  // said nothing.
+  if (!response.ok) throw new Error(`Write failed (HTTP ${response.status})`);
 
-  const dane = (await response.json()) as { nieprzeczytane: number };
-  return dane.nieprzeczytane;
+  const data = (await response.json()) as { unread: number };
+  return data.unread;
 }
 
-/** Badge z liczbą na ikonie PWA — działa w zainstalowanej appce. */
-function ustawBadge(liczba: number): void {
+/** Numeric badge on the PWA icon — works in the installed app. */
+function setBadge(count: number): void {
   if (!("setAppBadge" in navigator)) return;
-  if (liczba > 0) void navigator.setAppBadge(liczba);
+  if (count > 0) void navigator.setAppBadge(count);
   else void navigator.clearAppBadge();
 }
 
 function ItemCard({
   item,
-  przeczytany,
-  ulubiony,
-  zaznaczony,
-  onZaznacz,
-  onPrzelaczPrzeczytany,
-  onPrzelaczUlubiony,
-  onUsun,
+  read,
+  starred,
+  selected,
+  onSelect,
+  onToggleRead,
+  onToggleStarred,
+  onDelete,
 }: {
   item: NewsItem;
-  przeczytany: boolean;
-  ulubiony: boolean;
-  zaznaczony: boolean;
-  onZaznacz: (id: number, zaznaczony: boolean) => void;
-  onPrzelaczPrzeczytany: (id: number, przeczytany: boolean) => void;
-  onPrzelaczUlubiony: (id: number, ulubiony: boolean) => void;
-  onUsun: (id: number) => void;
+  read: boolean;
+  starred: boolean;
+  selected: boolean;
+  onSelect: (id: number, selected: boolean) => void;
+  onToggleRead: (id: number, read: boolean) => void;
+  onToggleStarred: (id: number, starred: boolean) => void;
+  onDelete: (id: number) => void;
 }) {
-  const data = formatujDate(item.publishedAt);
+  const date = formatDate(item.publishedAt);
 
   return (
-    <Card className={cn("transition-opacity", przeczytany && "opacity-60")}>
+    <Card className={cn("transition-opacity", read && "opacity-60")}>
       <CardHeader className="gap-3">
         <div className="flex items-start gap-3">
           <Checkbox
-            checked={zaznaczony}
-            onCheckedChange={(stan) => onZaznacz(item.id, stan === true)}
+            checked={selected}
+            onCheckedChange={(state) => onSelect(item.id, state === true)}
             aria-label={`Zaznacz: ${item.title}`}
             className="mt-1 shrink-0"
           />
@@ -80,16 +81,16 @@ function ItemCard({
               )}
               {item.topics?.map((topic) => (
                 <Badge key={topic} variant="outline">
-                  {ETYKIETY_TEMATOW[topic as Temat] ?? topic}
+                  {TOPIC_LABELS[topic as Topic] ?? topic}
                 </Badge>
               ))}
             </div>
 
             <CardTitle className="text-base leading-snug">
               {/*
-                Otwarcie linku NIE oznacza wpisu jako przeczytanego (ADR-0003).
-                Wcześniej robiło to za użytkownika, więc otwarcie artykułu
-                w nowej karcie "na później" wyrzucało go ze skrzynki.
+                Opening the link does NOT mark the item as read (ADR-0003).
+                It used to do that on the user's behalf, so opening an article
+                in a new tab "for later" threw it out of the inbox.
               */}
               <a
                 href={item.url}
@@ -106,18 +107,18 @@ function ItemCard({
           <Button
             variant="ghost"
             size="icon"
-            aria-pressed={ulubiony}
-            aria-label={ulubiony ? "Usuń z ulubionych" : "Dodaj do ulubionych"}
-            title={ulubiony ? "Usuń z ulubionych" : "Dodaj do ulubionych"}
-            onClick={() => onPrzelaczUlubiony(item.id, !ulubiony)}
+            aria-pressed={starred}
+            aria-label={starred ? "Usuń z ulubionych" : "Dodaj do ulubionych"}
+            title={starred ? "Usuń z ulubionych" : "Dodaj do ulubionych"}
+            onClick={() => onToggleStarred(item.id, !starred)}
             className={cn(
               "-mt-1 shrink-0",
-              ulubiony
+              starred
                 ? "text-brand hover:text-brand"
                 : "text-muted-foreground hover:text-foreground",
             )}
           >
-            <Star className={cn("size-4", ulubiony && "fill-current")} aria-hidden />
+            <Star className={cn("size-4", starred && "fill-current")} aria-hidden />
           </Button>
         </div>
       </CardHeader>
@@ -130,39 +131,37 @@ function ItemCard({
         <div className="flex flex-wrap items-center justify-between gap-3">
           <p className="text-muted-foreground text-xs">
             {item.sourceName}
-            {data && ` · ${data}`}
+            {date && ` · ${date}`}
           </p>
 
           <div className="flex items-center gap-2">
             {/*
-              Jeden przełącznik zamiast jednokierunkowej akcji: do Etapu 5
-              odhaczenie dało się cofnąć wyłącznie przez bazę, więc pomyłkowe
-              kliknięcie było nieodwracalne z poziomu appki.
+              One toggle instead of a one-way action: until Stage 5 marking as
+              read could only be undone through the database, so a mistaken
+              click was irreversible from inside the app.
             */}
             <Button
-              variant={przeczytany ? "ghost" : "outline"}
+              variant={read ? "ghost" : "outline"}
               size="sm"
-              aria-pressed={przeczytany}
+              aria-pressed={read}
               title={
-                przeczytany
-                  ? "Oznacz z powrotem jako nieprzeczytane"
-                  : "Oznacz jako przeczytane"
+                read ? "Oznacz z powrotem jako nieprzeczytane" : "Oznacz jako przeczytane"
               }
-              onClick={() => onPrzelaczPrzeczytany(item.id, !przeczytany)}
-              className={przeczytany ? "text-muted-foreground" : undefined}
+              onClick={() => onToggleRead(item.id, !read)}
+              className={read ? "text-muted-foreground" : undefined}
             >
-              {przeczytany ? (
+              {read ? (
                 <Undo2 className="size-4" aria-hidden />
               ) : (
                 <Check className="size-4" aria-hidden />
               )}
-              {przeczytany ? "Nieprzeczytane" : "Przeczytane"}
+              {read ? "Nieprzeczytane" : "Przeczytane"}
             </Button>
 
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => onUsun(item.id)}
+              onClick={() => onDelete(item.id)}
               aria-label={`Usuń: ${item.title}`}
               className="text-muted-foreground hover:text-destructive"
             >
@@ -175,208 +174,210 @@ function ItemCard({
   );
 }
 
-const PUSTE: Record<Widok, string> = {
-  nowe: "Skrzynka pusta. Agent sprawdza źródła co dwa dni — nowe wpisy pojawią się tutaj.",
-  ulubione: "Nic jeszcze nie ma gwiazdki. Oznacz wpis gwiazdką, żeby wrócić do niego później.",
-  przeczytane: "Nic jeszcze nie zostało odhaczone.",
-  wszystkie: "Brak wpisów. Po pierwszym przebiegu agenta pojawią się tutaj.",
+const EMPTY_MESSAGES: Record<View, string> = {
+  new: "Skrzynka pusta. Agent sprawdza źródła co dwa dni — nowe wpisy pojawią się tutaj.",
+  starred:
+    "Nic jeszcze nie ma gwiazdki. Oznacz wpis gwiazdką, żeby wrócić do niego później.",
+  read: "Nic jeszcze nie zostało odhaczone.",
+  all: "Brak wpisów. Po pierwszym przebiegu agenta pojawią się tutaj.",
 };
 
 export function Inbox({
-  wpisy,
-  widok,
-  dzisiaj,
+  items,
+  view,
+  today,
 }: {
-  wpisy: NewsItem[];
-  widok: Widok;
-  /** Dzień kalendarzowy ustalony przez serwer — patrz `lib/grupowanie.ts`. */
-  dzisiaj: string;
+  items: NewsItem[];
+  view: View;
+  /** Calendar day decided by the server — see `lib/date-groups.ts`. */
+  today: string;
 }) {
   const router = useRouter();
-  const [usuniete, setUsuniete] = useState<Set<number>>(new Set());
-  // Nadpisania optymistyczne: `Map` zamiast `Set`, bo oba stany są teraz
-  // dwukierunkowe — sama obecność id nie mówi już, w którą stronę poszła zmiana.
-  const [stanCzytania, setStanCzytania] = useState<Map<number, boolean>>(new Map());
-  const [stanGwiazdki, setStanGwiazdki] = useState<Map<number, boolean>>(new Map());
-  const [zaznaczone, setZaznaczone] = useState<Set<number>>(new Set());
-  const [blad, setBlad] = useState<string | null>(null);
+  const [deleted, setDeleted] = useState<Set<number>>(new Set());
+  // Optimistic overrides: a `Map` rather than a `Set`, because both states are
+  // now bidirectional — the mere presence of an id no longer says which way
+  // the change went.
+  const [readOverrides, setReadOverrides] = useState<Map<number, boolean>>(new Map());
+  const [starOverrides, setStarOverrides] = useState<Map<number, boolean>>(new Map());
+  const [selected, setSelected] = useState<Set<number>>(new Set());
+  const [error, setError] = useState<string | null>(null);
   const [, startTransition] = useTransition();
 
-  const odswiez = () => startTransition(() => router.refresh());
+  const refresh = () => startTransition(() => router.refresh());
 
-  const czyPrzeczytany = (item: NewsItem) =>
-    stanCzytania.get(item.id) ?? item.readAt !== null;
-  const czyUlubiony = (item: NewsItem) =>
-    stanGwiazdki.get(item.id) ?? item.starredAt !== null;
+  const isRead = (item: NewsItem) => readOverrides.get(item.id) ?? item.readAt !== null;
+  const isStarred = (item: NewsItem) =>
+    starOverrides.get(item.id) ?? item.starredAt !== null;
 
-  const widoczne = useMemo(
+  const visible = useMemo(
     () =>
-      wpisy.filter((item) => {
-        if (usuniete.has(item.id)) return false;
+      items.filter((item) => {
+        if (deleted.has(item.id)) return false;
 
-        const przeczytany = stanCzytania.get(item.id) ?? item.readAt !== null;
-        const ulubiony = stanGwiazdki.get(item.id) ?? item.starredAt !== null;
+        const read = readOverrides.get(item.id) ?? item.readAt !== null;
+        const starred = starOverrides.get(item.id) ?? item.starredAt !== null;
 
-        // Wpis znika tylko z tej zakładki, do której przestał należeć.
-        // W "Wszystkich" zostaje i zmienia wygląd — inaczej karta uciekałaby
-        // spod kursora w widoku, który z założenia pokazuje komplet.
-        if (widok === "nowe" && przeczytany) return false;
-        if (widok === "przeczytane" && !przeczytany) return false;
-        if (widok === "ulubione" && !ulubiony) return false;
+        // An item disappears only from the tab it stopped belonging to.
+        // In "All" it stays and merely changes appearance — otherwise the card
+        // would run away from under the cursor in a view whose whole point is
+        // showing everything.
+        if (view === "new" && read) return false;
+        if (view === "read" && !read) return false;
+        if (view === "starred" && !starred) return false;
         return true;
       }),
-    [wpisy, usuniete, stanCzytania, stanGwiazdki, widok],
+    [items, deleted, readOverrides, starOverrides, view],
   );
 
-  const grupy = useMemo(() => pogrupuj(widoczne, dzisiaj), [widoczne, dzisiaj]);
-  const zaznaczoneWidoczne = widoczne.filter((item) => zaznaczone.has(item.id));
+  const groups = useMemo(() => groupByDate(visible, today), [visible, today]);
+  const selectedVisible = visible.filter((item) => selected.has(item.id));
 
-  const przelaczZaznaczenie = (id: number, wybrany: boolean) => {
-    setZaznaczone((biezace) => {
-      const nowe = new Set(biezace);
-      if (wybrany) nowe.add(id);
-      else nowe.delete(id);
-      return nowe;
+  const toggleSelection = (id: number, checked: boolean) => {
+    setSelected((current) => {
+      const next = new Set(current);
+      if (checked) next.add(id);
+      else next.delete(id);
+      return next;
     });
   };
 
-  const odznaczWszystko = () => setZaznaczone(new Set());
+  const clearSelection = () => setSelected(new Set());
 
-  /** Wspólna obsługa nadpisań optymistycznych z wycofaniem przy błędzie. */
-  function zapisz(
-    ustaw: React.Dispatch<React.SetStateAction<Map<number, boolean>>>,
+  /** Shared handling of optimistic overrides with rollback on failure. */
+  function save(
+    apply: React.Dispatch<React.SetStateAction<Map<number, boolean>>>,
     ids: number[],
-    wartosc: boolean,
-    trasa: Trasa,
+    value: boolean,
+    route: Route,
     body: unknown,
-    komunikat: string,
+    logMessage: string,
   ) {
     if (ids.length === 0) return;
 
-    let poprzednie: Map<number, boolean> = new Map();
-    ustaw((biezace) => {
-      poprzednie = biezace;
-      const nowe = new Map(biezace);
-      for (const id of ids) nowe.set(id, wartosc);
-      return nowe;
+    let previous: Map<number, boolean> = new Map();
+    apply((current) => {
+      previous = current;
+      const next = new Map(current);
+      for (const id of ids) next.set(id, value);
+      return next;
     });
 
-    setBlad(null);
-    odznaczWszystko();
+    setError(null);
+    clearSelection();
 
-    void wyslij(trasa, body)
-      .then((liczba) => {
-        ustawBadge(liczba);
-        odswiez();
+    void send(route, body)
+      .then((unread) => {
+        setBadge(unread);
+        refresh();
       })
-      .catch((error: unknown) => {
-        console.error(`[skrzynka] ${komunikat}`, error);
-        setBlad("Nie udało się zapisać. Wpisy wróciły na miejsce.");
-        ustaw(poprzednie);
+      .catch((cause: unknown) => {
+        console.error(`[inbox] ${logMessage}`, cause);
+        setError("Nie udało się zapisać. Wpisy wróciły na miejsce.");
+        apply(previous);
       });
   }
 
-  const ustawPrzeczytane = (ids: number[], przeczytane: boolean) =>
-    zapisz(
-      setStanCzytania,
+  const setRead = (ids: number[], read: boolean) =>
+    save(
+      setReadOverrides,
       ids,
-      przeczytane,
+      read,
       "/api/items/read",
-      przeczytane ? { ids } : { ids, odznacz: true },
-      "zmiana stanu przeczytania nieudana",
+      read ? { ids } : { ids, unmark: true },
+      "changing read state failed",
     );
 
-  const ustawUlubione = (ids: number[], gwiazdka: boolean) =>
-    zapisz(
-      setStanGwiazdki,
+  const setStarred = (ids: number[], starred: boolean) =>
+    save(
+      setStarOverrides,
       ids,
-      gwiazdka,
+      starred,
       "/api/items/star",
-      { ids, gwiazdka },
-      "zmiana ulubionych nieudana",
+      { ids, starred },
+      "changing starred state failed",
     );
 
-  function cofnijUsuniecie(ids: number[]) {
-    void wyslij("/api/items/delete", { ids, przywroc: true })
-      .then((liczba) => {
-        ustawBadge(liczba);
-        setUsuniete((biezace) => {
-          const nowe = new Set(biezace);
-          for (const id of ids) nowe.delete(id);
-          return nowe;
+  function undoDelete(ids: number[]) {
+    void send("/api/items/delete", { ids, restore: true })
+      .then((unread) => {
+        setBadge(unread);
+        setDeleted((current) => {
+          const next = new Set(current);
+          for (const id of ids) next.delete(id);
+          return next;
         });
-        odswiez();
+        refresh();
       })
-      .catch((error: unknown) => {
-        console.error("[skrzynka] cofnięcie nieudane", error);
+      .catch((cause: unknown) => {
+        console.error("[inbox] undo failed", cause);
         toast.error("Nie udało się cofnąć usunięcia.");
       });
   }
 
-  function usun(ids: number[]) {
+  function remove(ids: number[]) {
     if (ids.length === 0) return;
-    const poprzednie = usuniete;
+    const previous = deleted;
 
-    setUsuniete((biezace) => new Set([...biezace, ...ids]));
-    setBlad(null);
-    odznaczWszystko();
+    setDeleted((current) => new Set([...current, ...ids]));
+    setError(null);
+    clearSelection();
 
-    void wyslij("/api/items/delete", { ids })
-      .then((liczba) => {
-        ustawBadge(liczba);
-        odswiez();
+    void send("/api/items/delete", { ids })
+      .then((unread) => {
+        setBadge(unread);
+        refresh();
 
-        // Usuwanie jest miękkie (ADR-0003), więc cofnięcie to zwykły zapis,
-        // a nie odtwarzanie czegoś, czego już nie ma.
+        // Deleting is soft (ADR-0003), so undo is an ordinary write rather than
+        // resurrecting something that no longer exists.
         toast(ids.length === 1 ? "Wpis usunięty" : `Usunięto wpisy: ${ids.length}`, {
-          action: { label: "Cofnij", onClick: () => cofnijUsuniecie(ids) },
+          action: { label: "Cofnij", onClick: () => undoDelete(ids) },
         });
       })
-      .catch((error: unknown) => {
-        console.error("[skrzynka] usunięcie nieudane", error);
-        setBlad("Nie udało się usunąć. Wpisy wróciły na miejsce.");
-        setUsuniete(poprzednie);
+      .catch((cause: unknown) => {
+        console.error("[inbox] delete failed", cause);
+        setError("Nie udało się usunąć. Wpisy wróciły na miejsce.");
+        setDeleted(previous);
       });
   }
 
-  const doOdhaczenia = zaznaczoneWidoczne.filter((item) => !czyPrzeczytany(item));
-  const doOdznaczenia = zaznaczoneWidoczne.filter((item) => czyPrzeczytany(item));
-  const doGwiazdki = zaznaczoneWidoczne.filter((item) => !czyUlubiony(item));
+  const toMarkRead = selectedVisible.filter((item) => !isRead(item));
+  const toMarkUnread = selectedVisible.filter((item) => isRead(item));
+  const toStar = selectedVisible.filter((item) => !isStarred(item));
 
   return (
     <div className="space-y-8">
-      {blad && (
+      {error && (
         <p className="text-destructive text-sm" role="alert">
-          {blad}
+          {error}
         </p>
       )}
 
-      {widoczne.length === 0 ? (
+      {visible.length === 0 ? (
         <Card>
           <CardContent className="text-muted-foreground py-8 text-center text-sm">
-            {PUSTE[widok]}
+            {EMPTY_MESSAGES[view]}
           </CardContent>
         </Card>
       ) : (
-        grupy.map((grupa) => {
-          const nieodhaczone = grupa.wpisy.filter((item) => !czyPrzeczytany(item));
+        groups.map((group) => {
+          const unread = group.items.filter((item) => !isRead(item));
 
           return (
-            <section key={grupa.kubelek} className="space-y-4">
+            <section key={group.bucket} className="space-y-4">
               <div className="flex items-center justify-between gap-4">
                 <h2 className="text-muted-foreground text-xs font-semibold tracking-wide uppercase">
-                  {grupa.etykieta}
-                  <span className="ml-2 tabular-nums opacity-70">{grupa.wpisy.length}</span>
+                  {group.label}
+                  <span className="ml-2 tabular-nums opacity-70">{group.items.length}</span>
                 </h2>
 
-                {nieodhaczone.length > 0 && (
+                {unread.length > 0 && (
                   <Button
                     variant="ghost"
                     size="sm"
                     className="text-muted-foreground hover:text-foreground text-xs"
                     onClick={() =>
-                      ustawPrzeczytane(
-                        nieodhaczone.map((item) => item.id),
+                      setRead(
+                        unread.map((item) => item.id),
                         true,
                       )
                     }
@@ -388,17 +389,17 @@ export function Inbox({
               </div>
 
               <ol className="space-y-4">
-                {grupa.wpisy.map((item) => (
+                {group.items.map((item) => (
                   <li key={item.id}>
                     <ItemCard
                       item={item}
-                      przeczytany={czyPrzeczytany(item)}
-                      ulubiony={czyUlubiony(item)}
-                      zaznaczony={zaznaczone.has(item.id)}
-                      onZaznacz={przelaczZaznaczenie}
-                      onPrzelaczPrzeczytany={(id, stan) => ustawPrzeczytane([id], stan)}
-                      onPrzelaczUlubiony={(id, stan) => ustawUlubione([id], stan)}
-                      onUsun={(id) => usun([id])}
+                      read={isRead(item)}
+                      starred={isStarred(item)}
+                      selected={selected.has(item.id)}
+                      onSelect={toggleSelection}
+                      onToggleRead={(id, state) => setRead([id], state)}
+                      onToggleStarred={(id, state) => setStarred([id], state)}
+                      onDelete={(id) => remove([id])}
                     />
                   </li>
                 ))}
@@ -408,11 +409,11 @@ export function Inbox({
         })
       )}
 
-      {/* Pasek akcji zbiorczych — pojawia się dopiero, gdy coś jest zaznaczone.
-          `fixed`, nie `sticky`: na telefonie ma być w zasięgu kciuka niezależnie
-          od tego, jak daleko użytkownik przewinął. Przycisk „na górę" siedzi
-          wyżej (`bottom-24`), więc nigdy się z tym paskiem nie nakłada. */}
-      {zaznaczoneWidoczne.length > 0 && (
+      {/* Bulk action bar — appears only once something is selected.
+          `fixed`, not `sticky`: on a phone it has to stay within thumb reach no
+          matter how far the user has scrolled. The scroll-to-top button sits
+          higher (`bottom-24`), so the two never overlap. */}
+      {selectedVisible.length > 0 && (
         <div
           role="region"
           aria-label="Akcje dla zaznaczonych"
@@ -420,18 +421,18 @@ export function Inbox({
         >
           <div className="bg-popover text-popover-foreground border-border flex flex-wrap items-center justify-center gap-2 rounded-lg border p-2 shadow-lg">
             <span className="px-2 text-sm tabular-nums">
-              Zaznaczone: {zaznaczoneWidoczne.length}
+              Zaznaczone: {selectedVisible.length}
             </span>
 
-            {/* Kierunek akcji zależy od tego, co jest w zaznaczeniu — przy
-                mieszanym pokazujemy oba przyciski, każdy działa na swoją część. */}
-            {doOdhaczenia.length > 0 && (
+            {/* The direction of the action depends on what is selected — for a
+                mixed selection we show both buttons, each acting on its part. */}
+            {toMarkRead.length > 0 && (
               <Button
                 variant="outline"
                 size="sm"
                 onClick={() =>
-                  ustawPrzeczytane(
-                    doOdhaczenia.map((item) => item.id),
+                  setRead(
+                    toMarkRead.map((item) => item.id),
                     true,
                   )
                 }
@@ -441,13 +442,13 @@ export function Inbox({
               </Button>
             )}
 
-            {doOdznaczenia.length > 0 && (
+            {toMarkUnread.length > 0 && (
               <Button
                 variant="outline"
                 size="sm"
                 onClick={() =>
-                  ustawPrzeczytane(
-                    doOdznaczenia.map((item) => item.id),
+                  setRead(
+                    toMarkUnread.map((item) => item.id),
                     false,
                   )
                 }
@@ -461,25 +462,23 @@ export function Inbox({
               variant="outline"
               size="sm"
               onClick={() =>
-                ustawUlubione(
-                  (doGwiazdki.length > 0 ? doGwiazdki : zaznaczoneWidoczne).map(
-                    (item) => item.id,
-                  ),
-                  doGwiazdki.length > 0,
+                setStarred(
+                  (toStar.length > 0 ? toStar : selectedVisible).map((item) => item.id),
+                  toStar.length > 0,
                 )
               }
             >
               <Star
-                className={cn("size-4", doGwiazdki.length === 0 && "fill-current")}
+                className={cn("size-4", toStar.length === 0 && "fill-current")}
                 aria-hidden
               />
-              {doGwiazdki.length > 0 ? "Do ulubionych" : "Bez gwiazdki"}
+              {toStar.length > 0 ? "Do ulubionych" : "Bez gwiazdki"}
             </Button>
 
             <Button
               variant="outline"
               size="sm"
-              onClick={() => usun(zaznaczoneWidoczne.map((item) => item.id))}
+              onClick={() => remove(selectedVisible.map((item) => item.id))}
               className="text-destructive hover:text-destructive"
             >
               <Trash2 className="size-4" aria-hidden />
@@ -489,7 +488,7 @@ export function Inbox({
             <Button
               variant="ghost"
               size="sm"
-              onClick={odznaczWszystko}
+              onClick={clearSelection}
               aria-label="Odznacz wszystkie"
             >
               <X className="size-4" aria-hidden />
