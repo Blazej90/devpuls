@@ -1,6 +1,7 @@
 import Link from "next/link";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight, X } from "lucide-react";
 
+import { MuteButton } from "@/components/source-mute";
 import { cn } from "@/lib/utils";
 import {
   PAGE_SIZE,
@@ -22,21 +23,38 @@ import {
  * the client, while here every tab is a different database query. Driving it
  * from the URL would mean two sources of truth fighting over the same thing.
  */
-function hrefFor(view: View, topic: Topic | null, page = 1): string {
+export function hrefFor({
+  view,
+  topic,
+  query,
+  source,
+  page = 1,
+}: {
+  view: View;
+  topic: Topic | null;
+  query: string | null;
+  source: string | null;
+  /** Omitted on purpose wherever the page should reset — see below. */
+  page?: number;
+}): string {
   const params = new URLSearchParams();
   // Defaults are omitted so that a "clean" address is simply `/`.
   if (view !== "new") params.set("view", view);
   if (topic) params.set("topic", topic);
+  if (query) params.set("q", query);
+  if (source) params.set("source", source);
   if (page > 1) params.set("page", String(page));
 
-  const query = params.toString();
-  return query ? `/?${query}` : "/";
+  const search = params.toString();
+  return search ? `/?${search}` : "/";
 }
 
 /**
  * Switching the tab or the category **resets the page** — `hrefFor` called
- * without a third argument omits `page`. Otherwise moving to a category with
- * three items while page four is open would show an empty list.
+ * without `page` omits it. Otherwise moving to a category with three items
+ * while page four is open would show an empty list. The search phrase goes the
+ * other way: it is carried along everywhere, because switching tabs while
+ * searching means "show me the hits in that other tab", not "drop the phrase".
  */
 
 /**
@@ -48,10 +66,20 @@ function hrefFor(view: View, topic: Topic | null, page = 1): string {
 export function InboxNav({
   view,
   topic,
+  query,
+  source,
+  sourceName,
+  sourceMuted,
   counts,
 }: {
   view: View;
   topic: Topic | null;
+  query: string | null;
+  source: string | null;
+  /** Label for the active source; `null` when the id matches nothing. */
+  sourceName: string | null;
+  /** Whether that source is muted — decides the direction of the button. */
+  sourceMuted: boolean;
   counts: Record<View, number>;
 }) {
   return (
@@ -72,7 +100,7 @@ export function InboxNav({
             return (
               <li key={entry} className="shrink-0">
                 <Link
-                  href={hrefFor(entry, topic)}
+                  href={hrefFor({ view: entry, topic, query, source })}
                   aria-current={active ? "page" : undefined}
                   className={cn(
                     "focus-visible:ring-ring -mb-px flex items-center gap-2 border-b-2 px-3 py-2.5",
@@ -111,7 +139,7 @@ export function InboxNav({
           return (
             <Link
               key={entry ?? "all"}
-              href={hrefFor(view, entry)}
+              href={hrefFor({ view, topic: entry, query, source })}
               aria-current={active ? "true" : undefined}
               className={cn(
                 "focus-visible:ring-ring rounded-full border px-3 py-1 text-xs font-medium",
@@ -126,6 +154,37 @@ export function InboxNav({
           );
         })}
       </nav>
+
+      {/*
+        The active source filter. It has no chip row of its own: with ten
+        sources, names as long as "TypeScript - GitHub Releases" would not fit a
+        phone and would compete with the categories for attention. It is turned
+        on by clicking the source on a card and shown here as a single removable
+        chip — the whole chip is the link that removes it, so there is one
+        target rather than a label with a tiny cross next to it.
+      */}
+      {source && (
+        <div className="flex flex-wrap items-center gap-2">
+          <Link
+            href={hrefFor({ view, topic, query, source: null })}
+            className="border-brand/40 bg-brand/10 text-foreground hover:border-brand focus-visible:ring-ring inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-colors focus-visible:ring-1 focus-visible:outline-none"
+          >
+            <span className="text-muted-foreground font-normal">Źródło:</span>
+            {sourceName ?? source}
+            <X className="size-3.5" aria-hidden />
+            <span className="sr-only">— wyłącz filtr źródła</span>
+          </Link>
+
+          {/* Muting starts here, right after looking at what the source
+              actually delivers. Undoing it lives on `/sources`, because a muted
+              source leaves no card in the inbox to click. */}
+          <MuteButton
+            id={source}
+            name={sourceName ?? source}
+            muted={sourceMuted}
+          />
+        </div>
+      )}
     </div>
   );
 }
@@ -141,6 +200,8 @@ export function InboxNav({
 export function Pagination({
   view,
   topic,
+  query,
+  source,
   page,
   hasMore,
   shown,
@@ -148,6 +209,8 @@ export function Pagination({
 }: {
   view: View;
   topic: Topic | null;
+  query: string | null;
+  source: string | null;
   page: number;
   hasMore: boolean;
   shown: number;
@@ -165,7 +228,7 @@ export function Pagination({
       className="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-4"
     >
       <PageLink
-        href={hrefFor(view, topic, page - 1)}
+        href={hrefFor({ view, topic, query, source, page: page - 1 })}
         enabled={page > 1}
         label="Poprzednia"
       >
@@ -177,7 +240,11 @@ export function Pagination({
         {shown > 0 ? `${first}–${last}` : "0"} z {total}
       </p>
 
-      <PageLink href={hrefFor(view, topic, page + 1)} enabled={hasMore} label="Następna">
+      <PageLink
+        href={hrefFor({ view, topic, query, source, page: page + 1 })}
+        enabled={hasMore}
+        label="Następna"
+      >
         Następna
         <ChevronRight className="size-4" aria-hidden />
       </PageLink>

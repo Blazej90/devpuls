@@ -3,6 +3,7 @@ import { assessItem } from "@/claude.js";
 import {
   findKnownUrls,
   insertItem,
+  listMutedSources,
   markNotified,
   saveRun,
   syncSources,
@@ -33,8 +34,25 @@ import type {
  * Run health is collected by `monitor.ts` and stored by `saveRun` (Phase 8).
  */
 async function run(): Promise<void> {
-  const sources = await loadSources();
-  await syncSources(sources);
+  const configured = await loadSources();
+  // The upsert has to happen before reading the mutes, so a source added to the
+  // config today exists in the table by the time we ask about it.
+  await syncSources(configured);
+
+  /*
+    Muting (migration 008) cuts in here, before anything is fetched — not at
+    delivery time. The expensive part of a run is the Claude call per item, and
+    paying to summarise a source the user has silenced would defeat the point of
+    silencing it. The trade-off: while a source is muted nothing is collected
+    from it, and an RSS feed only carries its most recent entries, so unmuting
+    brings back the current window rather than the whole gap.
+  */
+  const muted = await listMutedSources();
+  const sources = configured.filter((source) => !muted.has(source.id));
+
+  for (const source of configured) {
+    if (muted.has(source.id)) console.log(`[${source.id}] muted — skipped`);
+  }
 
   // Sources from the same host go one after another, different hosts in
   // parallel. Reddit returns 429 when three of its feeds hit at once from the

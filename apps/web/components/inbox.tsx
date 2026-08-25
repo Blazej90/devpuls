@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Check, CheckCheck, ExternalLink, Star, Trash2, Undo2, X } from "lucide-react";
 import { toast } from "sonner";
@@ -9,9 +10,18 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Highlight } from "@/components/highlight";
+import { setBadge } from "@/lib/badge";
 import { cn } from "@/lib/utils";
 import { formatDate, groupByDate } from "@/lib/date-groups";
-import { TOPIC_LABELS, type NewsItem, type Topic, type View } from "@/lib/items";
+import { hrefFor } from "@/components/inbox-filters";
+import {
+  TOPIC_LABELS,
+  type Filter,
+  type NewsItem,
+  type Topic,
+  type View,
+} from "@/lib/items";
 
 type Route = "/api/items/read" | "/api/items/delete" | "/api/items/star";
 
@@ -33,18 +43,12 @@ async function send(route: Route, body: unknown): Promise<number> {
   return data.unread;
 }
 
-/** Numeric badge on the PWA icon — works in the installed app. */
-function setBadge(count: number): void {
-  if (!("setAppBadge" in navigator)) return;
-  if (count > 0) void navigator.setAppBadge(count);
-  else void navigator.clearAppBadge();
-}
-
 function ItemCard({
   item,
   read,
   starred,
   selected,
+  filter,
   onSelect,
   onToggleRead,
   onToggleStarred,
@@ -54,6 +58,8 @@ function ItemCard({
   read: boolean;
   starred: boolean;
   selected: boolean;
+  /** The active filter: the phrase is marked out, the source is linked to. */
+  filter: Filter;
   onSelect: (id: number, selected: boolean) => void;
   onToggleRead: (id: number, read: boolean) => void;
   onToggleStarred: (id: number, starred: boolean) => void;
@@ -98,7 +104,9 @@ function ItemCard({
                 rel="noopener noreferrer"
                 className="inline-flex items-start gap-1.5 hover:underline"
               >
-                {item.title}
+                <span>
+                  <Highlight text={item.title} query={filter.query} />
+                </span>
                 <ExternalLink className="mt-1 size-3.5 shrink-0 opacity-60" aria-hidden />
               </a>
             </CardTitle>
@@ -125,12 +133,32 @@ function ItemCard({
 
       <CardContent className="space-y-3">
         {item.summaryPl && (
-          <p className="text-muted-foreground text-sm leading-relaxed">{item.summaryPl}</p>
+          <p className="text-muted-foreground text-sm leading-relaxed">
+            <Highlight text={item.summaryPl} query={filter.query} />
+          </p>
         )}
 
         <div className="flex flex-wrap items-center justify-between gap-3">
           <p className="text-muted-foreground text-xs">
-            {item.sourceName}
+            {/*
+              The source name is the way into the source filter — the thought
+              "more from these" happens exactly here, while reading the card, so
+              the control belongs here rather than in a separate list of ten
+              names above the inbox. Once that source is the active filter the
+              name goes back to being plain text: a link that leads to the page
+              you are already on is a dead end.
+            */}
+            {filter.source === item.sourceId ? (
+              item.sourceName
+            ) : (
+              <Link
+                href={hrefFor({ ...filter, source: item.sourceId })}
+                title={`Pokaż tylko wpisy z: ${item.sourceName}`}
+                className="hover:text-foreground focus-visible:ring-ring rounded-sm underline decoration-dotted underline-offset-2 transition-colors focus-visible:ring-1 focus-visible:outline-none"
+              >
+                {item.sourceName}
+              </Link>
+            )}
             {date && ` · ${date}`}
           </p>
 
@@ -184,14 +212,16 @@ const EMPTY_MESSAGES: Record<View, string> = {
 
 export function Inbox({
   items,
-  view,
+  filter,
   today,
 }: {
   items: NewsItem[];
-  view: View;
+  /** The whole filter, because the cards link back into it (source, phrase). */
+  filter: Filter;
   /** Calendar day decided by the server — see `lib/date-groups.ts`. */
   today: string;
 }) {
+  const { view, query } = filter;
   const router = useRouter();
   const [deleted, setDeleted] = useState<Set<number>>(new Set());
   // Optimistic overrides: a `Map` rather than a `Set`, because both states are
@@ -355,7 +385,14 @@ export function Inbox({
       {visible.length === 0 ? (
         <Card>
           <CardContent className="text-muted-foreground py-8 text-center text-sm">
-            {EMPTY_MESSAGES[view]}
+            {/* With a filter on, the tab's own empty message would be a lie —
+                the inbox is not empty, this phrase or source simply has
+                nothing here. */}
+            {query !== null
+              ? `Brak wyników dla „${query}” w tej zakładce. Liczniki nad listą pokazują, czy fraza trafia gdzie indziej.`
+              : filter.source !== null
+                ? "Brak wpisów z tego źródła w tej zakładce. Wyłącz filtr źródła chipem nad listą."
+                : EMPTY_MESSAGES[view]}
           </CardContent>
         </Card>
       ) : (
@@ -396,6 +433,7 @@ export function Inbox({
                       read={isRead(item)}
                       starred={isStarred(item)}
                       selected={selected.has(item.id)}
+                      filter={filter}
                       onSelect={toggleSelection}
                       onToggleRead={(id, state) => setRead([id], state)}
                       onToggleStarred={(id, state) => setStarred([id], state)}

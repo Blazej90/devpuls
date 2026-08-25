@@ -42,6 +42,22 @@ export async function syncSources(sources: SourceConfig[]): Promise<void> {
 }
 
 /**
+ * Sources muted in the app (migration 008). The pipeline skips them completely:
+ * no fetch, no Claude call, no insert.
+ *
+ * Read **after** `syncSources`, which only ever updates `name`, `url` and
+ * `type` — the mute survives every run, so it is a decision made in the app,
+ * not a state the config could overwrite.
+ */
+export async function listMutedSources(): Promise<Set<string>> {
+  const rows = (await db()`
+    SELECT id FROM sources WHERE muted_at IS NOT NULL
+  `) as { id: string }[];
+
+  return new Set(rows.map((row) => row.id));
+}
+
+/**
  * Deduplication by URL — returns the URLs we have seen already.
  * One query per run instead of one per item.
  */

@@ -138,3 +138,50 @@ Agent aktualizuje ten plik na bieżąco, ale nigdy go nie commituje bez zgody
       archiwum rośnie bez górnej granicy, a tak rozmiar odpowiedzi zostaje stały
       niezależnie od tego, jak głęboko sięgamy. Zmiana zakładki albo kategorii
       resetuje stronę
+
+## Faza 11 — Usprawnienia z użytkowania
+
+- [x] Wyszukiwarka wpisów — fraza jako trzeci filtr w URL-u (`?q=`), obok `?view=`
+      i `?topic=`. Szuka po tytule i streszczeniu PL, słowa łączone przez AND
+      („react server” znajdzie też „serwery w React”).
+      - Zwykłe `ILIKE`, bez `tsvector` i bez migracji: konfiguracja `polish` w
+        Postgresie wymaga słowników ispell po stronie serwera, których Neon nie
+        daje, a `simple` nie robi stemmingu, więc „Reacta” nie znalazłoby
+        „React” — dopasowanie po podciągu radzi sobie z odmianą lepiej. Przy
+        przebiegu co 2 dni tabela to kilkaset wierszy, indeks nic by nie dał.
+      - Fraza zawęża aktywną zakładkę, nic nie przełącza się samo. Liczniki przy
+        zakładkach liczą się z frazą, więc od razu widać, gdzie są trafienia.
+      - Pole na żywo (debounce 300 ms, `router.replace` ze `scroll: false`),
+        Enter stosuje od razu, Esc czyści. Trafienia podświetlone w tytule
+        i streszczeniu (`components/highlight.tsx`, bez `dangerouslySetInnerHTML`).
+      - Znane ograniczenie: polskie znaki bez `unaccent` — „nastepny” nie znajdzie
+        „następny”. Do rozważenia, jeśli zacznie przeszkadzać.
+      - Znane ograniczenie: krótkie tokeny łapią środek słów (`ai` → „chain”,
+        „trained”). Poprawka na granicę słowa dla tokenów < 3 znaków, jeśli zaboli.
+- [x] Filtr po źródle — `?source=` jako czwarty wymiar obok `view`, `topic` i `q`.
+      Włączany klikiem w nazwę źródła na karcie, wyłączany usuwalnym chipem nad
+      listą; przy aktywnym filtrze nazwa na karcie przestaje być linkiem.
+      - Nazwa źródła świadomie **nie** wchodzi do frazy `?q=`. Sprawdzone na
+        danych: „news” daje dziś 0 trafień w treści, a z nazwami źródeł dałoby 21
+        wpisów (Hacker News + OpenAI News + Anthropic News) — ćwierć skrzynki;
+        „blog” 29 z 89. Nazwy źródeł to generyczne rzeczowniki, więc fraza
+        zaczęłaby znaczyć „skąd”, a nie „o czym”, i to tylko przy części słów.
+      - Bez własnego rzędu chipów: 10 źródeł o nazwach długości „TypeScript -
+        GitHub Releases” nie mieści się na telefonie i konkurowałoby z kategoriami.
+      - `listSources()` pytane tylko wtedy, gdy filtr jest aktywny — służy
+        wyłącznie do podpisania chipa nazwą zamiast identyfikatorem.
+- [x] Wyciszanie źródła (ADR-0004, migracja 008 — **zastosowana na żywej bazie**)
+      - `sources.muted_at`; agent pomija wyciszone źródło w całości (bez fetcha,
+        bez Claude, bez zapisu), appka chowa też wpisy zebrane wcześniej.
+        Nic nie jest kasowane — przywrócenie oddaje je w całości.
+      - Warunek `MUTED_EXCLUDED` w `buildConditions` + w `countUnread`,
+        `markAllRead` i `countSources`, żeby lista, liczniki zakładek i badge PWA
+        nie mogły się rozjechać.
+      - Wejście: przycisk „Wycisz” przy chipie aktywnego źródła w skrzynce.
+        Wyjście: podstrona `/sources` (lista z licznikami, link w nagłówku) —
+        wyciszone źródło nie zostawia w skrzynce karty do kliknięcia.
+      - `POST /api/sources/mute` zwraca `unread`, tak jak trasy wpisów;
+        `setBadge` wyjęte z `inbox.tsx` do `lib/badge.ts`, bo używają go teraz dwa
+        komponenty.
+      - Niesprawdzone na żywo: pominięcie źródła w agencie. Weryfikacja przy
+        najbliższym przebiegu — w logu ma się pojawić `[id] muted — skipped`.

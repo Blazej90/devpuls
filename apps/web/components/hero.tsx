@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Info } from "lucide-react";
+import { Info, Rss } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Logo } from "@/components/logo";
@@ -47,6 +47,16 @@ export function Hero({ unread, sources }: { unread: number; sources: number }) {
               the list (Stage 5): as a card it looked identical to an item, and
               the more content the app had, the harder it was to reach. */}
           <div className="flex shrink-0 items-center gap-2">
+            {/* The source list is also where a mute is undone (migration 008),
+                so it needs a way in that does not depend on the inbox — a muted
+                source has no card left to click. */}
+            <Link
+              href="/sources"
+              className="text-muted-foreground hover:text-foreground hover:bg-accent focus-visible:ring-ring inline-flex items-center gap-1.5 rounded-md px-2 py-1.5 text-sm transition-colors focus-visible:ring-1 focus-visible:outline-none"
+            >
+              <Rss className="size-4" aria-hidden />
+              <span className="hidden sm:inline">Źródła</span>
+            </Link>
             <Link
               href="/about"
               className="text-muted-foreground hover:text-foreground hover:bg-accent focus-visible:ring-ring inline-flex items-center gap-1.5 rounded-md px-2 py-1.5 text-sm transition-colors focus-visible:ring-1 focus-visible:outline-none"
