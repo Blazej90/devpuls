@@ -218,6 +218,19 @@ Agent aktualizuje ten plik na bieżąco, ale nigdy go nie commituje bez zgody
         Zweryfikowane: trasa `/api/items/updates` (`since=0` → 89, `since`
         powyżej maksimum → 0, brak/śmieć → 400), render przycisku, reguła
         `overscroll-behavior-y` w zbudowanym CSS-ie.
+      - Komunikat „Brak nowych wpisów" podaje datę najbliższego przebiegu
+        (`lib/schedule.ts`), bo sam brak nowości czyta się jak usterka.
+        Harmonogram jest zdublowany z `.github/workflows/ingest.yml` — appka nie
+        ma jak przeczytać workflow w runtime, więc **zmiana crona to zmiana
+        w dwóch miejscach**. Krok 2 w polu dnia miesiąca to dni nieparzyste
+        (1, 3, 5 … 31), a nie „co 48 godzin": licznik startuje od nowa z każdym
+        miesiącem, więc po 31. wypada 1. i dwa przebiegi lądują dzień po dniu.
+        Godzina liczona w `Europe/Warsaw` (ta sama przypięta strefa co
+        w `date-groups.ts`), więc 07:00 UTC to 9:00 latem i 8:00 zimą.
+        Sprawdzone na 7 przypadkach: dzień parzysty, nieparzysty przed i po
+        7:00 UTC, przełom miesiąca 31→1, luty 27→1 marca, zima i noc zmiany
+        czasu. „Zaplanowany" w treści niesie jedyne zastrzeżenie, jakie ma
+        znaczenie — GitHub czasem opóźnia albo pomija slot.
 - [x] Ustawienia powiadomień pod kołem zębatym — podstrona `/settings`, ikona
       w nagłówku obok przełącznika motywu.
       - Powód: próg trafności i kategorie stały nad skrzynką i **zapisywały się

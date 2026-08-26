@@ -7,6 +7,7 @@ import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { setBadge } from "@/lib/badge";
+import { formatNextRun } from "@/lib/schedule";
 import { cn } from "@/lib/utils";
 
 /** "1 nowy wpis", "3 nowe wpisy", "5 nowych wpisów" — Polish plural inflection. */
@@ -61,8 +62,12 @@ function useRefresh(latestId: number) {
         return;
       }
 
+      // The date is the point of this message. Without it "nothing new" reads
+      // like a fault; with it, it is an answer — and "zaplanowany" carries the
+      // one caveat that matters, because GitHub delays or skips a scheduled
+      // run now and then.
       toast("Brak nowych wpisów", {
-        description: "Agent sprawdza źródła co 2 dni.",
+        description: `Agent sprawdza źródła co 2 dni. Najbliższy zaplanowany przebieg: ${formatNextRun()}.`,
       });
     } catch (cause: unknown) {
       console.error("[inbox] refresh failed", cause);

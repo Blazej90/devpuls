@@ -12,7 +12,7 @@
  * Europe/Warsaw costs nothing. Should users from other zones ever appear, this
  * has to move into settings rather than be read from the environment.
  */
-const TIME_ZONE = "Europe/Warsaw";
+export const TIME_ZONE = "Europe/Warsaw";
 
 /** `en-CA` yields `YYYY-MM-DD`, which sorts lexicographically. */
 const DAY_FORMAT = new Intl.DateTimeFormat("en-CA", {
