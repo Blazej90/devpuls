@@ -138,3 +138,246 @@ Agent aktualizuje ten plik na bieżąco, ale nigdy go nie commituje bez zgody
       archiwum rośnie bez górnej granicy, a tak rozmiar odpowiedzi zostaje stały
       niezależnie od tego, jak głęboko sięgamy. Zmiana zakładki albo kategorii
       resetuje stronę
+
+## Faza 11 — Usprawnienia z użytkowania
+
+- [x] Wyszukiwarka wpisów — fraza jako trzeci filtr w URL-u (`?q=`), obok `?view=`
+      i `?topic=`. Szuka po tytule i streszczeniu PL, słowa łączone przez AND
+      („react server” znajdzie też „serwery w React”).
+      - Zwykłe `ILIKE`, bez `tsvector` i bez migracji: konfiguracja `polish` w
+        Postgresie wymaga słowników ispell po stronie serwera, których Neon nie
+        daje, a `simple` nie robi stemmingu, więc „Reacta” nie znalazłoby
+        „React” — dopasowanie po podciągu radzi sobie z odmianą lepiej. Przy
+        przebiegu co 2 dni tabela to kilkaset wierszy, indeks nic by nie dał.
+      - Fraza zawęża aktywną zakładkę, nic nie przełącza się samo. Liczniki przy
+        zakładkach liczą się z frazą, więc od razu widać, gdzie są trafienia.
+      - Pole na żywo (debounce 300 ms, `router.replace` ze `scroll: false`),
+        Enter stosuje od razu, Esc czyści. Trafienia podświetlone w tytule
+        i streszczeniu (`components/highlight.tsx`, bez `dangerouslySetInnerHTML`).
+      - Znane ograniczenie: polskie znaki bez `unaccent` — „nastepny” nie znajdzie
+        „następny”. Do rozważenia, jeśli zacznie przeszkadzać.
+      - Znane ograniczenie: krótkie tokeny łapią środek słów (`ai` → „chain”,
+        „trained”). Poprawka na granicę słowa dla tokenów < 3 znaków, jeśli zaboli.
+- [x] Filtr po źródle — `?source=` jako czwarty wymiar obok `view`, `topic` i `q`.
+      Włączany klikiem w nazwę źródła na karcie, wyłączany usuwalnym chipem nad
+      listą; przy aktywnym filtrze nazwa na karcie przestaje być linkiem.
+      - Nazwa źródła świadomie **nie** wchodzi do frazy `?q=`. Sprawdzone na
+        danych: „news” daje dziś 0 trafień w treści, a z nazwami źródeł dałoby 21
+        wpisów (Hacker News + OpenAI News + Anthropic News) — ćwierć skrzynki;
+        „blog” 29 z 89. Nazwy źródeł to generyczne rzeczowniki, więc fraza
+        zaczęłaby znaczyć „skąd”, a nie „o czym”, i to tylko przy części słów.
+      - Bez własnego rzędu chipów: 10 źródeł o nazwach długości „TypeScript -
+        GitHub Releases” nie mieści się na telefonie i konkurowałoby z kategoriami.
+      - `listSources()` pytane tylko wtedy, gdy filtr jest aktywny — służy
+        wyłącznie do podpisania chipa nazwą zamiast identyfikatorem.
+- [x] Wyciszanie źródła (ADR-0004, migracja 008 — **zastosowana na żywej bazie**)
+      - `sources.muted_at`; agent pomija wyciszone źródło w całości (bez fetcha,
+        bez Claude, bez zapisu), appka chowa też wpisy zebrane wcześniej.
+        Nic nie jest kasowane — przywrócenie oddaje je w całości.
+      - Warunek `MUTED_EXCLUDED` w `buildConditions` + w `countUnread`,
+        `markAllRead` i `countSources`, żeby lista, liczniki zakładek i badge PWA
+        nie mogły się rozjechać.
+      - Wejście: przycisk „Wycisz” przy chipie aktywnego źródła w skrzynce.
+        Wyjście: podstrona `/sources` (lista z licznikami, link w nagłówku) —
+        wyciszone źródło nie zostawia w skrzynce karty do kliknięcia.
+      - `POST /api/sources/mute` zwraca `unread`, tak jak trasy wpisów;
+        `setBadge` wyjęte z `inbox.tsx` do `lib/badge.ts`, bo używają go teraz dwa
+        komponenty.
+      - Niesprawdzone na żywo: pominięcie źródła w agencie. Weryfikacja przy
+        najbliższym przebiegu — w logu ma się pojawić `[id] muted — skipped`.
+- [x] Odświeżanie skrzynki — gest „pull to refresh" na telefonie i przycisk
+      „Odśwież" w pasku stanu przebiegu.
+      - **Odświeżenie = ponowny odczyt bazy, nie uruchomienie agenta.** Wpisy
+        pojawiają się wyłącznie po przebiegu (co 2 dni, ADR-0002), a każdy
+        przebieg to płatne wywołanie Claude per wpis — gest, który da się
+        wywołać przypadkiem, nie może wydawać pieniędzy. Dlatego komunikat
+        „Brak nowych wpisów" jest tu równie ważny jak sam spinner: bez niego
+        gest wyglądałby na zepsuty za każdym razem, gdy zadziała poprawnie.
+      - Punkt odniesienia to `MAX(items.id)` z renderu serwera — `items.id` to
+        rosnący BIGINT, więc jedna liczba opisuje „to, co przeglądarka już
+        widziała". Bez migracji i bez porównywania zegara bazy z zegarem
+        telefonu. `GET /api/items/updates?since=` zwraca `{ added, unread }`.
+      - `added` liczy się **bez** aktywnych filtrów (zakładka, kategoria,
+        źródło, fraza) — pytanie brzmi „czy agent coś przyniósł", a nie „czy
+        przyniósł coś pasującego do mojego widoku". Stąd akcja „Pokaż"
+        w toaście: nowe wpisy mogą leżeć poza bieżącym widokiem.
+      - Gest tylko od samej góry strony (widok hero). Niżej ruch palcem w dół
+        znaczy „przewiń w górę" i przejęcie go sprawiłoby, że strona wydaje się
+        zablokowana. Poziomy ruch (pasek zakładek) też nie wchodzi.
+      - Napisany ręcznie, bez biblioteki: całość to trzy handlery `touch*`,
+        a alternatywa dokłada zależność z własnym spinerem, własnym motywem
+        i własnym zdaniem o kontenerze scrolla. Wskaźnik przesuwany zapisem do
+        DOM-u, nie stanem Reacta — inaczej byłby rerender na każdy piksel.
+      - Nierozłączna para: `overscroll-behavior-y: contain` na `body`
+        w `globals.css`. Bez tego Chrome na Androidzie odpala **swoje**
+        pull-to-refresh na tym samym geście i przeładowuje stronę pod spodem.
+      - Przycisk siedzi przy zdaniu „Sprawdzono 2 dni temu…", bo to ono jest
+        powodem, żeby go nacisnąć — i bo na desktopie, gdzie gestu nie ma, jest
+        jedyną drogą do tej akcji.
+      - Niesprawdzone na żywo: sam gest (brak urządzenia dotykowego w sesji).
+        Zweryfikowane: trasa `/api/items/updates` (`since=0` → 89, `since`
+        powyżej maksimum → 0, brak/śmieć → 400), render przycisku, reguła
+        `overscroll-behavior-y` w zbudowanym CSS-ie.
+      - Komunikat „Brak nowych wpisów" podaje datę najbliższego przebiegu
+        (`lib/schedule.ts`), bo sam brak nowości czyta się jak usterka.
+        Harmonogram jest zdublowany z `.github/workflows/ingest.yml` — appka nie
+        ma jak przeczytać workflow w runtime, więc **zmiana crona to zmiana
+        w dwóch miejscach**. Krok 2 w polu dnia miesiąca to dni nieparzyste
+        (1, 3, 5 … 31), a nie „co 48 godzin": licznik startuje od nowa z każdym
+        miesiącem, więc po 31. wypada 1. i dwa przebiegi lądują dzień po dniu.
+        Godzina liczona w `Europe/Warsaw` (ta sama przypięta strefa co
+        w `date-groups.ts`), więc 07:00 UTC to 9:00 latem i 8:00 zimą.
+        Sprawdzone na 7 przypadkach: dzień parzysty, nieparzysty przed i po
+        7:00 UTC, przełom miesiąca 31→1, luty 27→1 marca, zima i noc zmiany
+        czasu. „Zaplanowany" w treści niesie jedyne zastrzeżenie, jakie ma
+        znaczenie — GitHub czasem opóźnia albo pomija slot.
+      - Ta sama data w pasku `RunStatus`, pod „Sprawdzono … temu": jedna linijka
+        mówi, jak stare jest to, co widać, druga — kiedy przestanie być.
+        Nie pokazuje się przy `stale` (brak przebiegu od ponad 3 dni), bo
+        nagłówek mówi wtedy, że harmonogram wygląda na zepsuty, i data pod nim
+        przeczyłaby temu w tym samym zdaniu. Render po stronie serwera jest
+        bezpieczny wyłącznie dzięki przypiętej strefie z `date-groups.ts` —
+        czytana ze środowiska pokazałaby godzinę Vercela (UTC).
+- [x] Ustawienia powiadomień pod kołem zębatym — podstrona `/settings`, ikona
+      w nagłówku obok przełącznika motywu.
+      - Powód: próg trafności i kategorie stały nad skrzynką i **zapisywały się
+        przy każdym kliknięciu**. Jedno przypadkowe stuknięcie po cichu zmieniało
+        to, co agent wyśle, a potwierdzeniem było słowo, które samo znikało.
+      - Nowy model: dwa stany. **Zablokowany** — wszystkie przyciski wyboru
+        nieaktywne (`<fieldset disabled>`), pod spodem podsumowanie wyboru
+        i przycisk „Zmień". **Edycja** — przyciski aktywne, kończy ją „Zapisz"
+        (jeden PATCH) albo „Anuluj" (szkic wraca do zapisanego stanu). Po
+        zapisie toast z podsumowaniem: „Trafność 4+ · React, AI".
+      - Zapis nieudany zostawia formularz otwarty ze szkicem — nieudany zapis
+        nie może wyglądać jak udany, a karą nie może być wpisywanie wyboru
+        od nowa.
+      - Przy okazji zniknęły dwie obejścia, których stary wariant potrzebował:
+        stan dublowany w refach (dwa kliknięcia w jednym ticku Reacta czytały ten
+        sam nieaktualny domknięcie i drugie nadpisywało pierwsze) oraz kolejka
+        obietnic serializująca zapisy (przy zimnym starcie Neona pierwszy PATCH
+        potrafił dolecieć po drugim). Szkic edytowany przez funkcyjne `setState`
+        zawsze widzi aktualną wartość, a jeden zapis na kliknięcie nie ma się
+        z czym ścigać.
+      - Na ekranie głównym zostaje jedna linijka „Włącz powiadomienia o nowych
+        wpisach" z linkiem do ustawień — i tylko wtedy, gdy powiadomienia są
+        wyłączone. Bez tego kto nie kliknie w zębatkę, nigdy nie włączyłby tego,
+        po co ta appka powstała. Stany `unsupported` i `blocked` świadomie nie
+        dostają linijki: żadnego z nich nie da się rozwiązać stuknięciem w tej
+        appce, więc wyjaśnienie zostaje przy samym przełączniku.
+      - `usePushStatus()` wyjęte z `push-toggle.tsx` do `pwa/push-status.ts`, bo
+        dwa komponenty pytają teraz „czy to urządzenie jest zasubskrybowane"
+        i dwie kopie tej samej logiki prędzej czy później by się rozjechały.
+      - Niesprawdzone na żywo: cykl „Zmień → Zapisz" (wymaga urządzenia
+        z włączoną subskrypcją push). Zweryfikowane: `/settings` renderuje się
+        (200), karty ustawień zniknęły z ekranu głównego, zębatka linkuje.
+- [x] Pasek zakładek skrzynki przewija się wyłącznie w poziomie.
+      - Objaw: na telefonie pasek „Nowe / Ulubione / Przeczytane / Wszystkie"
+        dawał się ciągnąć palcem w górę i w dół, zamiast tylko na boki.
+      - Przyczyna: samo `overflow-x: auto` robi z pudełka kontener przewijania
+        na **obu** osiach — CSS zamienia drugie `visible` na `auto`. Zakładki
+        miały `-mb-px` (wystawały piksel poniżej `ul`, żeby wskaźnik nakrył
+        kreskę), więc pionowy zakres przewijania wynosił dokładnie ten 1 px.
+        Na iOS wystarczy, żeby gest złapał pasek i rozciągnął go gumką znacznie
+        dalej niż o piksel.
+      - Poprawka: `overflow-y: hidden` na pasku, a kreska przeniesiona z `ul`
+        na `nav` — przy `overflow-y: hidden` wskaźnik wystający poza `ul` nie
+        byłby już przewijalny, tylko **przycięty**. Teraz to `ul` wchodzi
+        pikselem na kreskę `nav` (`-mb-px`), a obramowanie rodzica maluje się
+        przed dziećmi, więc aktywna zakładka nadal je zakrywa. Wygląd bez zmian.
+      - `overscroll-x-contain` zatrzymuje rzut w bok wewnątrz paska, zamiast
+        oddawać go gestowi „wstecz" przeglądarki.
+      - Pionowe przewijanie strony palcem startującym na pasku działa dalej:
+        pudełko przestaje być przewijalne w pionie, więc gest trafia do
+        najbliższego przewijalnego przodka, czyli do strony.
+      - Niesprawdzone na żywo: sam gest (brak urządzenia dotykowego w sesji).
+        Zweryfikowane: `tsc`, `eslint`, render `/` (200) z nowymi klasami.
+- [x] Ikona w pustej skrzynce — karta „nie ma nic nowego" dostaje symbol.
+      - Powód: sam szary tekst na pustej karcie czyta się jak błąd wczytywania.
+        Ikona mówi „taki jest stan", zanim ktokolwiek przeczyta zdanie.
+      - Ikona zależy od powodu pustki, bo są cztery różne: pusta skrzynka
+        (`Inbox`, zakładki „Nowe" i „Wszystkie"), brak gwiazdek (`Star`), nic
+        odhaczonego (`CheckCheck`), a przy włączonym filtrze — przekreślona
+        lupa (`SearchX`) albo lejek (`FilterX`). Przekreślony filtr mówi „to
+        twoje kryteria", a nie „to twoja skrzynka" — dokładnie to samo
+        rozróżnienie, które od początku robią tam komunikaty.
+      - Ikona i komunikat wybierane w jednym miejscu (`EMPTY_STATES` + jedno
+        wyrażenie nad `return`), żeby nie dało się ich rozjechać.
+      - `aria-hidden` i cienka kreska (`strokeWidth={1.5}`, `opacity-30`):
+        ikona powtarza zdanie pod sobą, a przy pełnej wadze 40 px przekrzyczałaby
+        listę, którą zastępuje.
+      - Zweryfikowane na żywo: `?q=` bez trafień → `lucide-search-x`,
+        `?source=` nieistniejące → `lucide-filter-x`. Warianty zakładek nie
+        pokazały się, bo w bazie każda z czterech ma wpisy — to ta sama ścieżka
+        kodu, różni się tylko stała z ikoną.
+- [x] Ikona robota — widać, że nad artykułami pracuje agent AI.
+      - Dwa miejsca, bo mówią dwie różne rzeczy.
+      - **Nagłówek**: robot w kolorze marki przy zdaniu „Agent AI czyta źródła,
+        odsiewa szum i streszcza po polsku…". Kto otwiera appkę, ma w sekundę
+        wiedzieć, że streszczenia poniżej pisze agent, a nie redakcja — to
+        zmienia sposób, w jaki się je czyta, i jest najbardziej wyróżniającą
+        cechą tej appki. Samo zdanie zyskało „AI" wprost.
+      - **Karta wpisu**: ten sam robot, szary, przy streszczeniu. Streszczenie
+        to jedyny tekst na karcie, który napisała appka — tytuł i link pochodzą
+        ze źródła. Ikona zaznacza tę granicę, żeby maszynowa parafraza nie
+        została wzięta za słowa autora.
+      - `aria-hidden` na ikonie i `sr-only` „Streszczenie agenta AI:" przed
+        tekstem — czytnik ekranu nie zobaczy piktogramu, a to jest informacja,
+        nie ozdoba. Dla myszy `title` na opakowaniu ikony.
+      - Zweryfikowane na żywo: `/` renderuje 1 robota `text-brand`
+        w nagłówku i po jednym szarym na każdą z 8 kart w zakładce „Nowe".
+- [x] Licznik nieprzeczytanych jako klikalna pigułka pod nagłówkiem.
+      - Problem: `Badge` „8 nowych" stał obok logotypu i na telefonie musiał
+        zmieścić się w jednym rzędzie z napisem `text-4xl` i czterema
+        kontrolkami. Rząd kończył się szerokość, a badge lądował, gdzie akurat
+        było miejsce.
+      - Teraz osobny wiersz pod hasłem, na całą szerokość: pigułka w kolorze
+        marki, kropka nieprzeczytanych (ten sam sygnał, co w każdym kliencie
+        poczty), liczba i strzałka w dół.
+      - Klikalna: prowadzi do `/#inbox`, czyli do paska zakładek nad listą.
+        Adres z ukośnikiem, a nie samo `#inbox`, bo licznik ignoruje filtry —
+        z odfiltrowanego widoku albo ze strony czwartej sama kotwica
+        przewinęłaby do listy, w której nie ma tego, co policzono. `/` gubi
+        query string i ląduje na czystej zakładce „Nowe".
+      - Kotwica celuje w zakładki, nie w pierwszą kartę: to zakładka potwierdza,
+        że skok się udał — „Nowe 8" to ta sama liczba, w którą się kliknęło.
+      - Przy okazji `lib/plural.ts`: polska odmiana przez liczebnik była
+        rozpisana osobno w nagłówku i w odświeżaniu, a nowa pigułka byłaby
+        trzecią kopią. Reguła z wyjątkiem (12–14 zachowuje się jak grupa
+        „wiele", mimo końcówki 2–4) w dwóch kopiach prędzej czy później by się
+        rozjechała.
+      - Zweryfikowane na żywo: pigułka renderuje się z `href="/#inbox"`
+        i etykietą „8 nowych wpisów", `id="inbox"` jest na miejscu.
+- [x] Reddit: HTTP 429 na dwóch z trzech feedów przy każdym przebiegu.
+      - Objaw w pasku stanu: „Ostatni przebieg z zastrzeżeniami (2)",
+        `reddit-reactjs` i `reddit-localllama` z HTTP 429. Oba zapisane
+        przebiegi w tabeli `runs` wyglądały identycznie — to nie był pech,
+        tylko stan stały.
+      - Przyczyna: Reddit daje na nieuwierzytelnione `.rss` **jedno żądanie
+        na okno ~40–60 s per IP**. Trzy feedy szły sekwencyjnie, ale bez pauzy,
+        więc pierwszy z `sources.json` (`reddit-typescript`) zjadał cały
+        budżet, a dwa kolejne dostawały 429 milisekundy później. Zawsze te same
+        dwa, bo decydowała kolejność w configu.
+      - Drugi błąd: Reddit **nie wysyła `Retry-After`**, tylko
+        `x-ratelimit-reset`. Kod czytał wyłącznie ten pierwszy,
+        `Number(null)` dawało 0, więc wpadał w backoff 1 s → 2 s. Trzy
+        sekundy czekania przeciwko oknu minutowemu — pętla ponawiania była
+        z góry skazana.
+      - Odtworzone z domowego łącza (nie chodziło o IP runnera) i zmierzone
+        sondą co 15 s: 200 o +15 s, 429 o +31 s i +46 s, 200 o +62 s, 429
+        o +78 s i +93 s.
+      - Naprawa w `sources/http.ts`: pauza brana **przed** następnym żądaniem
+        do tego hosta, a nie odczekiwana po odmowie. Kluczowa obserwacja:
+        `x-ratelimit-remaining: 0` i `x-ratelimit-reset` przychodzą także
+        na **udanej** odpowiedzi, więc host sam mówi, ile czekać, zanim
+        cokolwiek się zepsuje. Ponawianie zostaje dla tego, czego nie da się
+        przewidzieć — 5xx i serwerów odmawiających bez wyjaśnienia.
+      - Budżet czekania na źródło: 90 s. Przekroczenie kończy się błędem
+        z własną treścią, a nie `break` — inaczej źródło raportowałoby się
+        jako „HTTP 0", czyli status, którego serwer nigdy nie wysłał.
+        Jeden feed nie może zatrzymać całego przebiegu.
+      - Mapa `nextSlot` jest na poziomie modułu, żeby to, czego nauczy się
+        pierwszy feed Reddita, chroniło dwa następne w tym samym przebiegu.
+      - Zweryfikowane na żywo, prawdziwym żądaniem do Reddita: wszystkie trzy
+        feedy pobrane, `+2s` typescript, `+20s` reactjs (pauza 17 s),
+        `+80s` localllama (pauza 59 s). Koszt: ok. 80 s dłuższy przebieg
+        raz na dwa dni — hosty idą równolegle, więc płaci tylko grupa Reddita.

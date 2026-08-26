@@ -89,5 +89,10 @@
   }
   body {
     @apply bg-background text-foreground;
+    /* The app has its own pull-to-refresh (`components/inbox-refresh.tsx`).
+       Without this, Chrome on Android runs its own on the same gesture and
+       reloads the whole page underneath ours; on iOS it also stops the page
+       from bouncing away from under the indicator. */
+    overscroll-behavior-y: contain;
   }
 }

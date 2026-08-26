@@ -1,17 +1,40 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Check, CheckCheck, ExternalLink, Star, Trash2, Undo2, X } from "lucide-react";
+import {
+  Bot,
+  Check,
+  CheckCheck,
+  ExternalLink,
+  FilterX,
+  Inbox as InboxIcon,
+  SearchX,
+  Star,
+  Trash2,
+  Undo2,
+  X,
+  type LucideIcon,
+} from "lucide-react";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Highlight } from "@/components/highlight";
+import { setBadge } from "@/lib/badge";
 import { cn } from "@/lib/utils";
 import { formatDate, groupByDate } from "@/lib/date-groups";
-import { TOPIC_LABELS, type NewsItem, type Topic, type View } from "@/lib/items";
+import { hrefFor } from "@/components/inbox-filters";
+import {
+  TOPIC_LABELS,
+  type Filter,
+  type NewsItem,
+  type Topic,
+  type View,
+} from "@/lib/items";
 
 type Route = "/api/items/read" | "/api/items/delete" | "/api/items/star";
 
@@ -33,18 +56,12 @@ async function send(route: Route, body: unknown): Promise<number> {
   return data.unread;
 }
 
-/** Numeric badge on the PWA icon — works in the installed app. */
-function setBadge(count: number): void {
-  if (!("setAppBadge" in navigator)) return;
-  if (count > 0) void navigator.setAppBadge(count);
-  else void navigator.clearAppBadge();
-}
-
 function ItemCard({
   item,
   read,
   starred,
   selected,
+  filter,
   onSelect,
   onToggleRead,
   onToggleStarred,
@@ -54,6 +71,8 @@ function ItemCard({
   read: boolean;
   starred: boolean;
   selected: boolean;
+  /** The active filter: the phrase is marked out, the source is linked to. */
+  filter: Filter;
   onSelect: (id: number, selected: boolean) => void;
   onToggleRead: (id: number, read: boolean) => void;
   onToggleStarred: (id: number, starred: boolean) => void;
@@ -98,7 +117,9 @@ function ItemCard({
                 rel="noopener noreferrer"
                 className="inline-flex items-start gap-1.5 hover:underline"
               >
-                {item.title}
+                <span>
+                  <Highlight text={item.title} query={filter.query} />
+                </span>
                 <ExternalLink className="mt-1 size-3.5 shrink-0 opacity-60" aria-hidden />
               </a>
             </CardTitle>
@@ -124,13 +145,47 @@ function ItemCard({
       </CardHeader>
 
       <CardContent className="space-y-3">
+        {/*
+          The summary is the only text on the card the app itself wrote — the
+          title and the link come from the source. The robot marks that
+          boundary, so a machine paraphrase is never mistaken for the author's
+          own words. Grey and 14px: a label, not a decoration, on every card.
+          The icon is `aria-hidden` and the same thing is said in words for a
+          screen reader, which cannot see a pictogram.
+        */}
         {item.summaryPl && (
-          <p className="text-muted-foreground text-sm leading-relaxed">{item.summaryPl}</p>
+          <div className="flex items-start gap-2">
+            <span title="Streszczenie napisane przez agenta AI" className="shrink-0">
+              <Bot className="text-muted-foreground/60 mt-0.5 size-3.5" aria-hidden />
+            </span>
+            <p className="text-muted-foreground text-sm leading-relaxed">
+              <span className="sr-only">Streszczenie agenta AI: </span>
+              <Highlight text={item.summaryPl} query={filter.query} />
+            </p>
+          </div>
         )}
 
         <div className="flex flex-wrap items-center justify-between gap-3">
           <p className="text-muted-foreground text-xs">
-            {item.sourceName}
+            {/*
+              The source name is the way into the source filter — the thought
+              "more from these" happens exactly here, while reading the card, so
+              the control belongs here rather than in a separate list of ten
+              names above the inbox. Once that source is the active filter the
+              name goes back to being plain text: a link that leads to the page
+              you are already on is a dead end.
+            */}
+            {filter.source === item.sourceId ? (
+              item.sourceName
+            ) : (
+              <Link
+                href={hrefFor({ ...filter, source: item.sourceId })}
+                title={`Pokaż tylko wpisy z: ${item.sourceName}`}
+                className="hover:text-foreground focus-visible:ring-ring rounded-sm underline decoration-dotted underline-offset-2 transition-colors focus-visible:ring-1 focus-visible:outline-none"
+              >
+                {item.sourceName}
+              </Link>
+            )}
             {date && ` · ${date}`}
           </p>
 
@@ -174,24 +229,45 @@ function ItemCard({
   );
 }
 
-const EMPTY_MESSAGES: Record<View, string> = {
-  new: "Skrzynka pusta. Agent sprawdza źródła co dwa dni — nowe wpisy pojawią się tutaj.",
-  starred:
-    "Nic jeszcze nie ma gwiazdki. Oznacz wpis gwiazdką, żeby wrócić do niego później.",
-  read: "Nic jeszcze nie zostało odhaczone.",
-  all: "Brak wpisów. Po pierwszym przebiegu agenta pojawią się tutaj.",
+/**
+ * The empty state, one entry per tab.
+ *
+ * The icon carries the same meaning as the sentence — an empty inbox, a
+ * starless list, nothing ticked off. It is read before the sentence is, and it
+ * is what makes the card look like a state of the app rather than a failure to
+ * load; the message alone, grey text on an empty card, reads like something
+ * went wrong.
+ */
+const EMPTY_STATES: Record<View, { icon: LucideIcon; message: string }> = {
+  new: {
+    icon: InboxIcon,
+    message:
+      "Skrzynka pusta. Agent sprawdza źródła co dwa dni — nowe wpisy pojawią się tutaj.",
+  },
+  starred: {
+    icon: Star,
+    message:
+      "Nic jeszcze nie ma gwiazdki. Oznacz wpis gwiazdką, żeby wrócić do niego później.",
+  },
+  read: { icon: CheckCheck, message: "Nic jeszcze nie zostało odhaczone." },
+  all: {
+    icon: InboxIcon,
+    message: "Brak wpisów. Po pierwszym przebiegu agenta pojawią się tutaj.",
+  },
 };
 
 export function Inbox({
   items,
-  view,
+  filter,
   today,
 }: {
   items: NewsItem[];
-  view: View;
+  /** The whole filter, because the cards link back into it (source, phrase). */
+  filter: Filter;
   /** Calendar day decided by the server — see `lib/date-groups.ts`. */
   today: string;
 }) {
+  const { view, query } = filter;
   const router = useRouter();
   const [deleted, setDeleted] = useState<Set<number>>(new Set());
   // Optimistic overrides: a `Map` rather than a `Set`, because both states are
@@ -344,6 +420,24 @@ export function Inbox({
   const toMarkUnread = selectedVisible.filter((item) => isRead(item));
   const toStar = selectedVisible.filter((item) => !isStarred(item));
 
+  // With a filter on, the tab's own empty message would be a lie — the inbox is
+  // not empty, this phrase or source simply has nothing here. The icon says the
+  // same thing before the sentence does: a crossed-out magnifier or funnel is
+  // "your filter", not "your inbox".
+  const { icon: EmptyIcon, message: emptyMessage } =
+    query !== null
+      ? {
+          icon: SearchX,
+          message: `Brak wyników dla „${query}” w tej zakładce. Liczniki nad listą pokazują, czy fraza trafia gdzie indziej.`,
+        }
+      : filter.source !== null
+        ? {
+            icon: FilterX,
+            message:
+              "Brak wpisów z tego źródła w tej zakładce. Wyłącz filtr źródła chipem nad listą.",
+          }
+        : EMPTY_STATES[view];
+
   return (
     <div className="space-y-8">
       {error && (
@@ -354,8 +448,17 @@ export function Inbox({
 
       {visible.length === 0 ? (
         <Card>
-          <CardContent className="text-muted-foreground py-8 text-center text-sm">
-            {EMPTY_MESSAGES[view]}
+          <CardContent className="text-muted-foreground flex flex-col items-center gap-3 py-10 text-center text-sm">
+            {/* Thin stroke and low opacity: this is a mood, not a control —
+                at full weight a 40px icon would outshout the whole list it is
+                standing in for. `aria-hidden`, because it repeats the
+                sentence right under it. */}
+            <EmptyIcon
+              className="size-10 opacity-30"
+              strokeWidth={1.5}
+              aria-hidden
+            />
+            <p className="max-w-sm text-balance">{emptyMessage}</p>
           </CardContent>
         </Card>
       ) : (
@@ -396,6 +499,7 @@ export function Inbox({
                       read={isRead(item)}
                       starred={isStarred(item)}
                       selected={selected.has(item.id)}
+                      filter={filter}
                       onSelect={toggleSelection}
                       onToggleRead={(id, state) => setRead([id], state)}
                       onToggleStarred={(id, state) => setStarred([id], state)}
