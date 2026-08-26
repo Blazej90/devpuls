@@ -231,6 +231,13 @@ Agent aktualizuje ten plik na bieżąco, ale nigdy go nie commituje bez zgody
         7:00 UTC, przełom miesiąca 31→1, luty 27→1 marca, zima i noc zmiany
         czasu. „Zaplanowany" w treści niesie jedyne zastrzeżenie, jakie ma
         znaczenie — GitHub czasem opóźnia albo pomija slot.
+      - Ta sama data w pasku `RunStatus`, pod „Sprawdzono … temu": jedna linijka
+        mówi, jak stare jest to, co widać, druga — kiedy przestanie być.
+        Nie pokazuje się przy `stale` (brak przebiegu od ponad 3 dni), bo
+        nagłówek mówi wtedy, że harmonogram wygląda na zepsuty, i data pod nim
+        przeczyłaby temu w tym samym zdaniu. Render po stronie serwera jest
+        bezpieczny wyłącznie dzięki przypiętej strefie z `date-groups.ts` —
+        czytana ze środowiska pokazałaby godzinę Vercela (UTC).
 - [x] Ustawienia powiadomień pod kołem zębatym — podstrona `/settings`, ikona
       w nagłówku obok przełącznika motywu.
       - Powód: próg trafności i kategorie stały nad skrzynką i **zapisywały się

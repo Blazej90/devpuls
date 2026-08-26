@@ -1,6 +1,7 @@
 import { CircleAlert, CircleCheck, Clock, TriangleAlert } from "lucide-react";
 
 import { RefreshButton } from "@/components/inbox-refresh";
+import { formatNextRun } from "@/lib/schedule";
 import { cn } from "@/lib/utils";
 import { isStale, STALE_AFTER_HOURS, type LastRun, type RunError } from "@/lib/runs";
 
@@ -49,12 +50,15 @@ const TONES: Record<Tone, { box: string; icon: string }> = {
 export function RunStatus({ run, latestId }: { run: LastRun | null; latestId: number }) {
   if (run === null) {
     return (
-      <div className="text-muted-foreground flex items-start justify-between gap-2 text-sm">
-        <p className="flex items-center gap-2">
-          <Clock className="size-4 shrink-0" aria-hidden />
-          Agent nie zapisał jeszcze żadnego przebiegu.
-        </p>
-        <RefreshButton latestId={latestId} />
+      <div className="text-muted-foreground space-y-1 text-sm">
+        <div className="flex items-start justify-between gap-2">
+          <p className="flex items-center gap-2">
+            <Clock className="size-4 shrink-0" aria-hidden />
+            Agent nie zapisał jeszcze żadnego przebiegu.
+          </p>
+          <RefreshButton latestId={latestId} />
+        </div>
+        <NextRun />
       </div>
     );
   }
@@ -110,6 +114,26 @@ export function RunStatus({ run, latestId }: { run: LastRun | null; latestId: nu
           {run.sourcesFailed} nieudanych
         </p>
       )}
+
+      {/* Not while stale: the headline is saying the schedule looks broken, and
+          naming a date under it would contradict that in the same breath. */}
+      {!stale && <NextRun className="mt-1" />}
     </div>
+  );
+}
+
+/**
+ * The next slot in the cron (`lib/schedule.ts`), the counterpart of "Sprawdzono
+ * …" above it: one line says how old this is, the other when it stops being.
+ *
+ * Rendered on the server, which is safe only because the time zone in
+ * `date-groups.ts` is pinned — read from the environment it would print the
+ * Vercel hour (UTC) rather than the reader's.
+ */
+function NextRun({ className }: { className?: string }) {
+  return (
+    <p className={cn("text-xs opacity-70", className)}>
+      Najbliższy zaplanowany przebieg: {formatNextRun()}
+    </p>
   );
 }
