@@ -4,6 +4,7 @@ import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
+  Bot,
   Check,
   CheckCheck,
   ExternalLink,
@@ -144,10 +145,24 @@ function ItemCard({
       </CardHeader>
 
       <CardContent className="space-y-3">
+        {/*
+          The summary is the only text on the card the app itself wrote — the
+          title and the link come from the source. The robot marks that
+          boundary, so a machine paraphrase is never mistaken for the author's
+          own words. Grey and 14px: a label, not a decoration, on every card.
+          The icon is `aria-hidden` and the same thing is said in words for a
+          screen reader, which cannot see a pictogram.
+        */}
         {item.summaryPl && (
-          <p className="text-muted-foreground text-sm leading-relaxed">
-            <Highlight text={item.summaryPl} query={filter.query} />
-          </p>
+          <div className="flex items-start gap-2">
+            <span title="Streszczenie napisane przez agenta AI" className="shrink-0">
+              <Bot className="text-muted-foreground/60 mt-0.5 size-3.5" aria-hidden />
+            </span>
+            <p className="text-muted-foreground text-sm leading-relaxed">
+              <span className="sr-only">Streszczenie agenta AI: </span>
+              <Highlight text={item.summaryPl} query={filter.query} />
+            </p>
+          </div>
         )}
 
         <div className="flex flex-wrap items-center justify-between gap-3">

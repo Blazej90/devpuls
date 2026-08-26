@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Info, Rss, Settings } from "lucide-react";
+import { Bot, Info, Rss, Settings } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Logo } from "@/components/logo";
@@ -84,9 +84,19 @@ export function Hero({ unread, sources }: { unread: number; sources: number }) {
           <p className="text-xl font-medium text-balance">
             Twój puls ekosystemu JavaScriptu.
           </p>
-          <p className="text-muted-foreground max-w-prose text-balance">
-            Agent czyta źródła, odsiewa szum i streszcza po polsku to, co faktycznie
-            dotyczy Twojego stacku.
+          {/* The robot marks the one sentence that says who does the work.
+              Whoever opens the app should know within a second that the
+              summaries below were written by an agent and not by an editor —
+              it changes how they are read, and it is the app's single most
+              distinctive claim. In the brand colour, because the agent is the
+              product; on the cards the same icon stays grey, where it is a
+              provenance mark rather than a headline. */}
+          <p className="text-muted-foreground flex max-w-prose items-start gap-2">
+            <Bot className="text-brand mt-0.5 size-4 shrink-0" aria-hidden />
+            <span className="text-balance">
+              Agent AI czyta źródła, odsiewa szum i streszcza po polsku to, co
+              faktycznie dotyczy Twojego stacku.
+            </span>
           </p>
         </div>
 

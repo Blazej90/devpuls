@@ -309,3 +309,19 @@ Agent aktualizuje ten plik na bieżąco, ale nigdy go nie commituje bez zgody
         `?source=` nieistniejące → `lucide-filter-x`. Warianty zakładek nie
         pokazały się, bo w bazie każda z czterech ma wpisy — to ta sama ścieżka
         kodu, różni się tylko stała z ikoną.
+- [x] Ikona robota — widać, że nad artykułami pracuje agent AI.
+      - Dwa miejsca, bo mówią dwie różne rzeczy.
+      - **Nagłówek**: robot w kolorze marki przy zdaniu „Agent AI czyta źródła,
+        odsiewa szum i streszcza po polsku…". Kto otwiera appkę, ma w sekundę
+        wiedzieć, że streszczenia poniżej pisze agent, a nie redakcja — to
+        zmienia sposób, w jaki się je czyta, i jest najbardziej wyróżniającą
+        cechą tej appki. Samo zdanie zyskało „AI" wprost.
+      - **Karta wpisu**: ten sam robot, szary, przy streszczeniu. Streszczenie
+        to jedyny tekst na karcie, który napisała appka — tytuł i link pochodzą
+        ze źródła. Ikona zaznacza tę granicę, żeby maszynowa parafraza nie
+        została wzięta za słowa autora.
+      - `aria-hidden` na ikonie i `sr-only` „Streszczenie agenta AI:" przed
+        tekstem — czytnik ekranu nie zobaczy piktogramu, a to jest informacja,
+        nie ozdoba. Dla myszy `title` na opakowaniu ikony.
+      - Zweryfikowane na żywo: `/` renderuje 1 robota `text-brand`
+        w nagłówku i po jednym szarym na każdą z 8 kart w zakładce „Nowe".
