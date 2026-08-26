@@ -381,3 +381,22 @@ Agent aktualizuje ten plik na bieżąco, ale nigdy go nie commituje bez zgody
         feedy pobrane, `+2s` typescript, `+20s` reactjs (pauza 17 s),
         `+80s` localllama (pauza 59 s). Koszt: ok. 80 s dłuższy przebieg
         raz na dwa dni — hosty idą równolegle, więc płaci tylko grupa Reddita.
+- [x] `/sources` na telefonie: przyciski w jednej linii dla każdego wiersza.
+      - Objaw: „TypeScript - GitHub Releases" ma dłuższą nazwę niż reszta, więc
+        para „W skrzynce → Wycisz" łamała się pod tekst, podczas gdy przy
+        krótszych nazwach zostawała obok. Żadne dwa wiersze nie były wyrównane.
+      - Przyczyna: `flex-wrap` na wierszu — o złamaniu decydowała długość
+        nazwy, czyli dane, a nie układ.
+      - Poprawka: poniżej `sm` przyciski dostają własny wiersz **zawsze**,
+        wyrównane do prawej; od `sm` w górę wracają obok tekstu jak dotąd.
+        Dzięki temu prawa krawędź jest ta sama we wszystkich jedenastu
+        wierszach — także tam, gdzie jest sam „Wycisz" bez „W skrzynce".
+      - `-mr-2` ściąga własny padding ostatniego przycisku z krawędzi, żeby
+        etykieta wypadała w jednej pionowej linii z tekstem nad nią.
+      - Przy okazji czwarta kopia polskiej odmiany przez liczebnik
+        (`formatItems`) zastąpiona przez `lib/plural.ts`.
+      - Zweryfikowane na żywo: wszystkie 11 wierszy renderuje się z nowymi
+        klasami, liczniki („20 wpisów", „10 wpisów") bez zmian.
+      - Uwaga na przyszłość: `app/sources/page.tsx` ma końce linii CRLF,
+        w odróżnieniu od komponentów w `components/`. Edycje przez skrypt
+        muszą to uwzględniać.

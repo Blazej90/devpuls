@@ -7,6 +7,7 @@ import { MuteButton } from "@/components/source-mute";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Separator } from "@/components/ui/separator";
 import { formatDate } from "@/lib/date-groups";
+import { plural } from "@/lib/plural";
 import { listSourceStats, type SourceStat } from "@/lib/sources";
 
 export const metadata: Metadata = { title: "Źródła" };
@@ -14,31 +15,31 @@ export const metadata: Metadata = { title: "Źródła" };
 /** The counts and the mute state are read live — this page is also the undo. */
 export const dynamic = "force-dynamic";
 
-/** "1 wpis", "3 wpisy", "11 wpisów" — Polish plural inflection. */
-function formatItems(count: number): string {
-  if (count === 1) return "1 wpis";
-  const units = count % 10;
-  const teens = count % 100;
-  const fewForm = units >= 2 && units <= 4 && (teens < 12 || teens > 14);
-  return `${count} ${fewForm ? "wpisy" : "wpisów"}`;
-}
-
 function SourceRow({ source }: { source: SourceStat }) {
   const muted = source.mutedAt !== null;
   const since = formatDate(source.mutedAt);
 
   return (
-    <li className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 py-3">
+    // Below `sm` the buttons get a row of their own — always, not only when
+    // they happen not to fit. With `flex-wrap` the break depended on the
+    // length of the name: "TypeScript - GitHub Releases" pushed its buttons
+    // under the text while every shorter name kept them beside it, so no two
+    // rows lined up. Stacked, the right edge is the same for all eleven,
+    // whether the row carries both buttons or only "Wycisz".
+    <li className="flex flex-col gap-2 py-3 sm:flex-row sm:items-center sm:justify-between sm:gap-x-4">
       <div className="min-w-0 space-y-1">
         <p className="text-sm font-medium">{source.name}</p>
         <p className="text-muted-foreground text-xs">
-          {formatItems(source.items)}
+          {plural(source.items, "wpis", "wpisy", "wpisów")}
           {source.unread > 0 && ` · ${source.unread} nieprzeczytanych`}
           {muted && since && ` · wyciszone od ${since}`}
         </p>
       </div>
 
-      <div className="flex shrink-0 items-center gap-1">
+      {/* `-mr-2` pulls the last button's own horizontal padding off the edge,
+          so the label lines up with the text above it instead of stopping a
+          few pixels short. */}
+      <div className="-mr-2 flex shrink-0 items-center justify-end gap-1 sm:mr-0">
         {/* A muted source has nothing to show in the inbox, so the shortcut
             would lead to an empty list. */}
         {!muted && source.items > 0 && (
