@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Info, Rss } from "lucide-react";
+import { Info, Rss, Settings } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Logo } from "@/components/logo";
@@ -63,6 +63,18 @@ export function Hero({ unread, sources }: { unread: number; sources: number }) {
             >
               <Info className="size-4" aria-hidden />
               <span className="hidden sm:inline">O aplikacji</span>
+            </Link>
+            {/* Notification settings moved out of the inbox in Phase 11 — the
+                gear is the whole of their discoverability, so it sits next to
+                the theme toggle, where a settings control is looked for. Icon
+                only, even on a wide screen: a fourth label would push the row
+                into the logo. */}
+            <Link
+              href="/settings"
+              aria-label="Ustawienia"
+              className="text-muted-foreground hover:text-foreground hover:bg-accent focus-visible:ring-ring inline-flex items-center rounded-md px-2 py-1.5 text-sm transition-colors focus-visible:ring-1 focus-visible:outline-none"
+            >
+              <Settings className="size-4" aria-hidden />
             </Link>
             <ThemeToggle />
           </div>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import { BellOff, BellRing, Loader2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -11,6 +11,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { usePushStatus, type PushStatus } from "@/components/pwa/push-status";
 
 /**
  * `applicationServerKey` has to be bytes, while the VAPID key arrives as
@@ -28,42 +29,16 @@ function urlBase64ToUint8Array(base64: string): Uint8Array<ArrayBuffer> {
   return output;
 }
 
-type Status = "checking" | "unsupported" | "blocked" | "off" | "on" | "working";
-
 const VAPID_PUBLIC_KEY = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ?? "";
 
+/**
+ * The on/off switch, on `/settings` since Phase 11. It used to sit above the
+ * inbox, where it kept asking a question already answered — the inbox now shows
+ * a single line of invitation instead, and only while notifications are off.
+ */
 export function PushToggle() {
-  const [status, setStatus] = useState<Status>("checking");
+  const [status, setStatus] = usePushStatus();
   const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    const check = async () => {
-      if (
-        !("serviceWorker" in navigator) ||
-        !("PushManager" in window) ||
-        !("Notification" in window)
-      ) {
-        if (!cancelled) setStatus("unsupported");
-        return;
-      }
-
-      if (Notification.permission === "denied") {
-        if (!cancelled) setStatus("blocked");
-        return;
-      }
-
-      const registration = await navigator.serviceWorker.ready;
-      const subscription = await registration.pushManager.getSubscription();
-      if (!cancelled) setStatus(subscription ? "on" : "off");
-    };
-
-    void check();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
 
   const enable = useCallback(async () => {
     setError(null);
@@ -105,7 +80,7 @@ export function PushToggle() {
       setError(cause instanceof Error ? cause.message : "Nieznany błąd");
       setStatus("off");
     }
-  }, []);
+  }, [setStatus]);
 
   const disable = useCallback(async () => {
     setError(null);
@@ -130,11 +105,11 @@ export function PushToggle() {
       setError(cause instanceof Error ? cause.message : "Nieznany błąd");
       setStatus("on");
     }
-  }, []);
+  }, [setStatus]);
 
   if (status === "checking") return null;
 
-  const descriptions: Record<Exclude<Status, "checking">, string> = {
+  const descriptions: Record<Exclude<PushStatus, "checking">, string> = {
     unsupported:
       "Ta przeglądarka nie obsługuje Web Push. Na iPhonie dodaj DevPuls do ekranu głównego.",
     blocked:

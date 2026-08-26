@@ -1,7 +1,6 @@
 import { Hero } from "@/components/hero";
 import { InstallHint } from "@/components/pwa/install-hint";
-import { PushSettings } from "@/components/pwa/push-settings";
-import { PushToggle } from "@/components/pwa/push-toggle";
+import { PushPrompt } from "@/components/pwa/push-prompt";
 import { ScrollToTop } from "@/components/scroll-to-top";
 import { Inbox } from "@/components/inbox";
 import { RunStatus } from "@/components/run-status";
@@ -85,8 +84,9 @@ export default async function HomePage({
       <RunStatus run={lastRun} latestId={latestId} />
 
       <InstallHint />
-      <PushToggle />
-      <PushSettings />
+      {/* The switch and the settings live under the gear since Phase 11; what
+          is left here is one line, and only while notifications are off. */}
+      <PushPrompt />
 
       {/* The field and the tabs are one control surface, so they sit closer to
           each other than to the rest of the page. */}

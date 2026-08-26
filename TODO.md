@@ -218,3 +218,35 @@ Agent aktualizuje ten plik na bieżąco, ale nigdy go nie commituje bez zgody
         Zweryfikowane: trasa `/api/items/updates` (`since=0` → 89, `since`
         powyżej maksimum → 0, brak/śmieć → 400), render przycisku, reguła
         `overscroll-behavior-y` w zbudowanym CSS-ie.
+- [x] Ustawienia powiadomień pod kołem zębatym — podstrona `/settings`, ikona
+      w nagłówku obok przełącznika motywu.
+      - Powód: próg trafności i kategorie stały nad skrzynką i **zapisywały się
+        przy każdym kliknięciu**. Jedno przypadkowe stuknięcie po cichu zmieniało
+        to, co agent wyśle, a potwierdzeniem było słowo, które samo znikało.
+      - Nowy model: dwa stany. **Zablokowany** — wszystkie przyciski wyboru
+        nieaktywne (`<fieldset disabled>`), pod spodem podsumowanie wyboru
+        i przycisk „Zmień". **Edycja** — przyciski aktywne, kończy ją „Zapisz"
+        (jeden PATCH) albo „Anuluj" (szkic wraca do zapisanego stanu). Po
+        zapisie toast z podsumowaniem: „Trafność 4+ · React, AI".
+      - Zapis nieudany zostawia formularz otwarty ze szkicem — nieudany zapis
+        nie może wyglądać jak udany, a karą nie może być wpisywanie wyboru
+        od nowa.
+      - Przy okazji zniknęły dwie obejścia, których stary wariant potrzebował:
+        stan dublowany w refach (dwa kliknięcia w jednym ticku Reacta czytały ten
+        sam nieaktualny domknięcie i drugie nadpisywało pierwsze) oraz kolejka
+        obietnic serializująca zapisy (przy zimnym starcie Neona pierwszy PATCH
+        potrafił dolecieć po drugim). Szkic edytowany przez funkcyjne `setState`
+        zawsze widzi aktualną wartość, a jeden zapis na kliknięcie nie ma się
+        z czym ścigać.
+      - Na ekranie głównym zostaje jedna linijka „Włącz powiadomienia o nowych
+        wpisach" z linkiem do ustawień — i tylko wtedy, gdy powiadomienia są
+        wyłączone. Bez tego kto nie kliknie w zębatkę, nigdy nie włączyłby tego,
+        po co ta appka powstała. Stany `unsupported` i `blocked` świadomie nie
+        dostają linijki: żadnego z nich nie da się rozwiązać stuknięciem w tej
+        appce, więc wyjaśnienie zostaje przy samym przełączniku.
+      - `usePushStatus()` wyjęte z `push-toggle.tsx` do `pwa/push-status.ts`, bo
+        dwa komponenty pytają teraz „czy to urządzenie jest zasubskrybowane"
+        i dwie kopie tej samej logiki prędzej czy później by się rozjechały.
+      - Niesprawdzone na żywo: cykl „Zmień → Zapisz" (wymaga urządzenia
+        z włączoną subskrypcją push). Zweryfikowane: `/settings` renderuje się
+        (200), karty ustawień zniknęły z ekranu głównego, zębatka linkuje.
