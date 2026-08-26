@@ -291,3 +291,21 @@ Agent aktualizuje ten plik na bieżąco, ale nigdy go nie commituje bez zgody
         najbliższego przewijalnego przodka, czyli do strony.
       - Niesprawdzone na żywo: sam gest (brak urządzenia dotykowego w sesji).
         Zweryfikowane: `tsc`, `eslint`, render `/` (200) z nowymi klasami.
+- [x] Ikona w pustej skrzynce — karta „nie ma nic nowego" dostaje symbol.
+      - Powód: sam szary tekst na pustej karcie czyta się jak błąd wczytywania.
+        Ikona mówi „taki jest stan", zanim ktokolwiek przeczyta zdanie.
+      - Ikona zależy od powodu pustki, bo są cztery różne: pusta skrzynka
+        (`Inbox`, zakładki „Nowe" i „Wszystkie"), brak gwiazdek (`Star`), nic
+        odhaczonego (`CheckCheck`), a przy włączonym filtrze — przekreślona
+        lupa (`SearchX`) albo lejek (`FilterX`). Przekreślony filtr mówi „to
+        twoje kryteria", a nie „to twoja skrzynka" — dokładnie to samo
+        rozróżnienie, które od początku robią tam komunikaty.
+      - Ikona i komunikat wybierane w jednym miejscu (`EMPTY_STATES` + jedno
+        wyrażenie nad `return`), żeby nie dało się ich rozjechać.
+      - `aria-hidden` i cienka kreska (`strokeWidth={1.5}`, `opacity-30`):
+        ikona powtarza zdanie pod sobą, a przy pełnej wadze 40 px przekrzyczałaby
+        listę, którą zastępuje.
+      - Zweryfikowane na żywo: `?q=` bez trafień → `lucide-search-x`,
+        `?source=` nieistniejące → `lucide-filter-x`. Warianty zakładek nie
+        pokazały się, bo w bazie każda z czterech ma wpisy — to ta sama ścieżka
+        kodu, różni się tylko stała z ikoną.

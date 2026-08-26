@@ -3,7 +3,19 @@
 import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Check, CheckCheck, ExternalLink, Star, Trash2, Undo2, X } from "lucide-react";
+import {
+  Check,
+  CheckCheck,
+  ExternalLink,
+  FilterX,
+  Inbox as InboxIcon,
+  SearchX,
+  Star,
+  Trash2,
+  Undo2,
+  X,
+  type LucideIcon,
+} from "lucide-react";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
@@ -202,12 +214,31 @@ function ItemCard({
   );
 }
 
-const EMPTY_MESSAGES: Record<View, string> = {
-  new: "Skrzynka pusta. Agent sprawdza źródła co dwa dni — nowe wpisy pojawią się tutaj.",
-  starred:
-    "Nic jeszcze nie ma gwiazdki. Oznacz wpis gwiazdką, żeby wrócić do niego później.",
-  read: "Nic jeszcze nie zostało odhaczone.",
-  all: "Brak wpisów. Po pierwszym przebiegu agenta pojawią się tutaj.",
+/**
+ * The empty state, one entry per tab.
+ *
+ * The icon carries the same meaning as the sentence — an empty inbox, a
+ * starless list, nothing ticked off. It is read before the sentence is, and it
+ * is what makes the card look like a state of the app rather than a failure to
+ * load; the message alone, grey text on an empty card, reads like something
+ * went wrong.
+ */
+const EMPTY_STATES: Record<View, { icon: LucideIcon; message: string }> = {
+  new: {
+    icon: InboxIcon,
+    message:
+      "Skrzynka pusta. Agent sprawdza źródła co dwa dni — nowe wpisy pojawią się tutaj.",
+  },
+  starred: {
+    icon: Star,
+    message:
+      "Nic jeszcze nie ma gwiazdki. Oznacz wpis gwiazdką, żeby wrócić do niego później.",
+  },
+  read: { icon: CheckCheck, message: "Nic jeszcze nie zostało odhaczone." },
+  all: {
+    icon: InboxIcon,
+    message: "Brak wpisów. Po pierwszym przebiegu agenta pojawią się tutaj.",
+  },
 };
 
 export function Inbox({
@@ -374,6 +405,24 @@ export function Inbox({
   const toMarkUnread = selectedVisible.filter((item) => isRead(item));
   const toStar = selectedVisible.filter((item) => !isStarred(item));
 
+  // With a filter on, the tab's own empty message would be a lie — the inbox is
+  // not empty, this phrase or source simply has nothing here. The icon says the
+  // same thing before the sentence does: a crossed-out magnifier or funnel is
+  // "your filter", not "your inbox".
+  const { icon: EmptyIcon, message: emptyMessage } =
+    query !== null
+      ? {
+          icon: SearchX,
+          message: `Brak wyników dla „${query}” w tej zakładce. Liczniki nad listą pokazują, czy fraza trafia gdzie indziej.`,
+        }
+      : filter.source !== null
+        ? {
+            icon: FilterX,
+            message:
+              "Brak wpisów z tego źródła w tej zakładce. Wyłącz filtr źródła chipem nad listą.",
+          }
+        : EMPTY_STATES[view];
+
   return (
     <div className="space-y-8">
       {error && (
@@ -384,15 +433,17 @@ export function Inbox({
 
       {visible.length === 0 ? (
         <Card>
-          <CardContent className="text-muted-foreground py-8 text-center text-sm">
-            {/* With a filter on, the tab's own empty message would be a lie —
-                the inbox is not empty, this phrase or source simply has
-                nothing here. */}
-            {query !== null
-              ? `Brak wyników dla „${query}” w tej zakładce. Liczniki nad listą pokazują, czy fraza trafia gdzie indziej.`
-              : filter.source !== null
-                ? "Brak wpisów z tego źródła w tej zakładce. Wyłącz filtr źródła chipem nad listą."
-                : EMPTY_MESSAGES[view]}
+          <CardContent className="text-muted-foreground flex flex-col items-center gap-3 py-10 text-center text-sm">
+            {/* Thin stroke and low opacity: this is a mood, not a control —
+                at full weight a 40px icon would outshout the whole list it is
+                standing in for. `aria-hidden`, because it repeats the
+                sentence right under it. */}
+            <EmptyIcon
+              className="size-10 opacity-30"
+              strokeWidth={1.5}
+              aria-hidden
+            />
+            <p className="max-w-sm text-balance">{emptyMessage}</p>
           </CardContent>
         </Card>
       ) : (
