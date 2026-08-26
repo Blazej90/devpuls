@@ -84,7 +84,12 @@ export function InboxNav({
 }) {
   return (
     <div className="space-y-4">
-      <nav aria-label="Widok skrzynki">
+      {/*
+        The hairline sits on the `nav`, not on the `ul` — see the strip below
+        for why. The `ul` is pulled a pixel over it, so the last row of the
+        tabs and the line occupy the same pixel.
+      */}
+      <nav aria-label="Widok skrzynki" className="border-border border-b">
         {/*
           The separator is a hairline in the `border` colour, while the active
           tab indicator is a thicker line in the brand colour. The indicator
@@ -92,9 +97,19 @@ export function InboxNav({
           line, so it read as one continuous rule instead of a selection.
 
           Horizontal scrolling, because four tabs with counters do not fit the
-          width of a phone.
+          width of a phone — and **strictly** horizontal. `overflow-x: auto`
+          alone turns the box into a scroll container on both axes (CSS computes
+          the other `visible` into `auto`), so the pixel the indicator used to
+          hang outside the `ul` was a pixel of vertical scroll range: on a phone
+          the whole strip rubber-banded up and down under the finger. Hence
+          `overflow-y: hidden` — which in turn is why the hairline moved to the
+          `nav`, because anything hanging below the `ul` would now be clipped
+          instead of merely scrollable.
+
+          `overscroll-x-contain` keeps a fling that runs off the end inside the
+          strip rather than handing it to the browser's back gesture.
         */}
-        <ul className="border-border flex gap-1 overflow-x-auto border-b [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <ul className="-mb-px flex gap-1 overflow-x-auto overflow-y-hidden overscroll-x-contain [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {VIEWS.map((entry) => {
             const active = entry === view;
             return (
@@ -103,7 +118,7 @@ export function InboxNav({
                   href={hrefFor({ view: entry, topic, query, source })}
                   aria-current={active ? "page" : undefined}
                   className={cn(
-                    "focus-visible:ring-ring -mb-px flex items-center gap-2 border-b-2 px-3 py-2.5",
+                    "focus-visible:ring-ring flex items-center gap-2 border-b-2 px-3 py-2.5",
                     "text-sm transition-colors focus-visible:ring-1 focus-visible:outline-none",
                     active
                       ? "border-brand text-foreground font-medium"

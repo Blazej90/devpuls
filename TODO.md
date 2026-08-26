@@ -270,3 +270,24 @@ Agent aktualizuje ten plik na bieżąco, ale nigdy go nie commituje bez zgody
       - Niesprawdzone na żywo: cykl „Zmień → Zapisz" (wymaga urządzenia
         z włączoną subskrypcją push). Zweryfikowane: `/settings` renderuje się
         (200), karty ustawień zniknęły z ekranu głównego, zębatka linkuje.
+- [x] Pasek zakładek skrzynki przewija się wyłącznie w poziomie.
+      - Objaw: na telefonie pasek „Nowe / Ulubione / Przeczytane / Wszystkie"
+        dawał się ciągnąć palcem w górę i w dół, zamiast tylko na boki.
+      - Przyczyna: samo `overflow-x: auto` robi z pudełka kontener przewijania
+        na **obu** osiach — CSS zamienia drugie `visible` na `auto`. Zakładki
+        miały `-mb-px` (wystawały piksel poniżej `ul`, żeby wskaźnik nakrył
+        kreskę), więc pionowy zakres przewijania wynosił dokładnie ten 1 px.
+        Na iOS wystarczy, żeby gest złapał pasek i rozciągnął go gumką znacznie
+        dalej niż o piksel.
+      - Poprawka: `overflow-y: hidden` na pasku, a kreska przeniesiona z `ul`
+        na `nav` — przy `overflow-y: hidden` wskaźnik wystający poza `ul` nie
+        byłby już przewijalny, tylko **przycięty**. Teraz to `ul` wchodzi
+        pikselem na kreskę `nav` (`-mb-px`), a obramowanie rodzica maluje się
+        przed dziećmi, więc aktywna zakładka nadal je zakrywa. Wygląd bez zmian.
+      - `overscroll-x-contain` zatrzymuje rzut w bok wewnątrz paska, zamiast
+        oddawać go gestowi „wstecz" przeglądarki.
+      - Pionowe przewijanie strony palcem startującym na pasku działa dalej:
+        pudełko przestaje być przewijalne w pionie, więc gest trafia do
+        najbliższego przewijalnego przodka, czyli do strony.
+      - Niesprawdzone na żywo: sam gest (brak urządzenia dotykowego w sesji).
+        Zweryfikowane: `tsc`, `eslint`, render `/` (200) z nowymi klasami.
