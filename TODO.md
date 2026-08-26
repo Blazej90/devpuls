@@ -185,3 +185,36 @@ Agent aktualizuje ten plik na bieżąco, ale nigdy go nie commituje bez zgody
         komponenty.
       - Niesprawdzone na żywo: pominięcie źródła w agencie. Weryfikacja przy
         najbliższym przebiegu — w logu ma się pojawić `[id] muted — skipped`.
+- [x] Odświeżanie skrzynki — gest „pull to refresh" na telefonie i przycisk
+      „Odśwież" w pasku stanu przebiegu.
+      - **Odświeżenie = ponowny odczyt bazy, nie uruchomienie agenta.** Wpisy
+        pojawiają się wyłącznie po przebiegu (co 2 dni, ADR-0002), a każdy
+        przebieg to płatne wywołanie Claude per wpis — gest, który da się
+        wywołać przypadkiem, nie może wydawać pieniędzy. Dlatego komunikat
+        „Brak nowych wpisów" jest tu równie ważny jak sam spinner: bez niego
+        gest wyglądałby na zepsuty za każdym razem, gdy zadziała poprawnie.
+      - Punkt odniesienia to `MAX(items.id)` z renderu serwera — `items.id` to
+        rosnący BIGINT, więc jedna liczba opisuje „to, co przeglądarka już
+        widziała". Bez migracji i bez porównywania zegara bazy z zegarem
+        telefonu. `GET /api/items/updates?since=` zwraca `{ added, unread }`.
+      - `added` liczy się **bez** aktywnych filtrów (zakładka, kategoria,
+        źródło, fraza) — pytanie brzmi „czy agent coś przyniósł", a nie „czy
+        przyniósł coś pasującego do mojego widoku". Stąd akcja „Pokaż"
+        w toaście: nowe wpisy mogą leżeć poza bieżącym widokiem.
+      - Gest tylko od samej góry strony (widok hero). Niżej ruch palcem w dół
+        znaczy „przewiń w górę" i przejęcie go sprawiłoby, że strona wydaje się
+        zablokowana. Poziomy ruch (pasek zakładek) też nie wchodzi.
+      - Napisany ręcznie, bez biblioteki: całość to trzy handlery `touch*`,
+        a alternatywa dokłada zależność z własnym spinerem, własnym motywem
+        i własnym zdaniem o kontenerze scrolla. Wskaźnik przesuwany zapisem do
+        DOM-u, nie stanem Reacta — inaczej byłby rerender na każdy piksel.
+      - Nierozłączna para: `overscroll-behavior-y: contain` na `body`
+        w `globals.css`. Bez tego Chrome na Androidzie odpala **swoje**
+        pull-to-refresh na tym samym geście i przeładowuje stronę pod spodem.
+      - Przycisk siedzi przy zdaniu „Sprawdzono 2 dni temu…", bo to ono jest
+        powodem, żeby go nacisnąć — i bo na desktopie, gdzie gestu nie ma, jest
+        jedyną drogą do tej akcji.
+      - Niesprawdzone na żywo: sam gest (brak urządzenia dotykowego w sesji).
+        Zweryfikowane: trasa `/api/items/updates` (`since=0` → 89, `since`
+        powyżej maksimum → 0, brak/śmieć → 400), render przycisku, reguła
+        `overscroll-behavior-y` w zbudowanym CSS-ie.

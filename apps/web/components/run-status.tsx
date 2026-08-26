@@ -1,5 +1,6 @@
 import { CircleAlert, CircleCheck, Clock, TriangleAlert } from "lucide-react";
 
+import { RefreshButton } from "@/components/inbox-refresh";
 import { cn } from "@/lib/utils";
 import { isStale, STALE_AFTER_HOURS, type LastRun, type RunError } from "@/lib/runs";
 
@@ -41,14 +42,20 @@ const TONES: Record<Tone, { box: string; icon: string }> = {
  *
  * When everything works it takes a single line of grey text — monitoring that
  * shouts while healthy stops being read.
+ *
+ * The refresh button lives here (Phase 11) because this is the sentence that
+ * makes someone want to press it: it says how old what you are looking at is.
  */
-export function RunStatus({ run }: { run: LastRun | null }) {
+export function RunStatus({ run, latestId }: { run: LastRun | null; latestId: number }) {
   if (run === null) {
     return (
-      <p className="text-muted-foreground flex items-center gap-2 text-sm">
-        <Clock className="size-4 shrink-0" aria-hidden />
-        Agent nie zapisał jeszcze żadnego przebiegu.
-      </p>
+      <div className="text-muted-foreground flex items-start justify-between gap-2 text-sm">
+        <p className="flex items-center gap-2">
+          <Clock className="size-4 shrink-0" aria-hidden />
+          Agent nie zapisał jeszcze żadnego przebiegu.
+        </p>
+        <RefreshButton latestId={latestId} />
+      </div>
     );
   }
 
@@ -73,10 +80,13 @@ export function RunStatus({ run }: { run: LastRun | null }) {
 
   return (
     <div className={cn("text-sm", TONES[tone].box)}>
-      <p className="flex items-center gap-2">
-        <Icon className={cn("size-4 shrink-0", TONES[tone].icon)} aria-hidden />
-        <span>{headline}</span>
-      </p>
+      <div className="flex items-start justify-between gap-2">
+        <p className="flex items-center gap-2">
+          <Icon className={cn("size-4 shrink-0", TONES[tone].icon)} aria-hidden />
+          <span>{headline}</span>
+        </p>
+        <RefreshButton latestId={latestId} />
+      </div>
 
       {tone !== "ok" && run.errors.length > 0 && (
         <details className="mt-2">

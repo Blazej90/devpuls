@@ -7,11 +7,13 @@ import { Inbox } from "@/components/inbox";
 import { RunStatus } from "@/components/run-status";
 import { InboxNav, Pagination } from "@/components/inbox-filters";
 import { InboxSearch } from "@/components/inbox-search";
+import { PullToRefresh } from "@/components/inbox-refresh";
 import { calendarDay } from "@/lib/date-groups";
 import {
   counts,
   countSources,
   countUnread,
+  latestItemId,
   listItems,
   parsePage,
   parseQuery,
@@ -42,17 +44,27 @@ export default async function HomePage({
     source: parseSource(params.source),
   };
 
-  const [{ items, hasMore }, viewCounts, unread, sources, sourceNames, lastRun] =
-    await Promise.all([
-      listItems(filter, page),
-      counts(filter),
-      countUnread(),
-      countSources(),
-      // Only needed to label the chip, so it is not worth a query when no
-      // source filter is on.
-      filter.source ? listSources() : [],
-      getLastRunSafe(),
-    ]);
+  const [
+    { items, hasMore },
+    viewCounts,
+    unread,
+    sources,
+    sourceNames,
+    lastRun,
+    latestId,
+  ] = await Promise.all([
+    listItems(filter, page),
+    counts(filter),
+    countUnread(),
+    countSources(),
+    // Only needed to label the chip, so it is not worth a query when no
+    // source filter is on.
+    filter.source ? listSources() : [],
+    getLastRunSafe(),
+    // The reference point for the refresh: everything above this id arrived
+    // after this render (Phase 11).
+    latestItemId(),
+  ]);
 
   const activeSource = sourceNames.find((entry) => entry.id === filter.source) ?? null;
 
@@ -63,9 +75,14 @@ export default async function HomePage({
 
   return (
     <main className="mx-auto flex w-full max-w-2xl flex-col gap-8 px-6 py-12">
+      {/* Fixed to the top of the window, so it stands outside the flow of the
+          page — mounted here only because the inbox is the one view a refresh
+          means anything on. */}
+      <PullToRefresh latestId={latestId} />
+
       <Hero unread={unread} sources={sources} />
 
-      <RunStatus run={lastRun} />
+      <RunStatus run={lastRun} latestId={latestId} />
 
       <InstallHint />
       <PushToggle />

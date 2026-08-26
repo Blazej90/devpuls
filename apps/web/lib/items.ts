@@ -354,6 +354,49 @@ export async function countUnread(): Promise<number> {
   return rows[0]?.n ?? 0;
 }
 
+/**
+ * The id of the newest item in the inbox — the reference point for "has
+ * anything arrived since I opened this?" (Phase 11).
+ *
+ * `items.id` is a monotonically increasing BIGINT, so this single number
+ * describes everything the browser has already seen: no extra column, and no
+ * comparing clocks between the database and a phone that may be minutes off.
+ *
+ * The conditions have to match the inbox itself. An item below the relevance
+ * threshold, deleted, or from a muted source is not "new" — it is invisible,
+ * and counting it would promise something the list will never show.
+ */
+export async function latestItemId(): Promise<number> {
+  const rows = (await sql()`
+    SELECT COALESCE(MAX(id), 0)::text AS id FROM items
+    WHERE deleted_at IS NULL
+      AND relevance_score >= ${MIN_RELEVANCE}
+      AND source_id NOT IN (SELECT id FROM sources WHERE muted_at IS NOT NULL)
+  `) as { id: string }[];
+
+  return Number(rows[0]?.id ?? 0);
+}
+
+/**
+ * How many inbox items arrived after `since` — the number the refresh reports.
+ *
+ * Deliberately ignores the active view, category, source and phrase: the
+ * question being answered is "did the agent bring anything", not "did it bring
+ * anything matching my current filters". The toast offers a way to the full
+ * list precisely because the answer can lie outside what is on screen.
+ */
+export async function countNewerThan(since: number): Promise<number> {
+  const rows = (await sql()`
+    SELECT COUNT(*)::int AS n FROM items
+    WHERE id > ${String(since)}
+      AND deleted_at IS NULL
+      AND relevance_score >= ${MIN_RELEVANCE}
+      AND source_id NOT IN (SELECT id FROM sources WHERE muted_at IS NOT NULL)
+  `) as { n: number }[];
+
+  return rows[0]?.n ?? 0;
+}
+
 /* ---------------------------------------------------------------------------
  * Writes. Kept here next to the reads because they share the same conditions
  * (`deleted_at IS NULL`, the relevance threshold) — split apart they would
