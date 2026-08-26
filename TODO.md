@@ -347,3 +347,37 @@ Agent aktualizuje ten plik na bieżąco, ale nigdy go nie commituje bez zgody
         rozjechała.
       - Zweryfikowane na żywo: pigułka renderuje się z `href="/#inbox"`
         i etykietą „8 nowych wpisów", `id="inbox"` jest na miejscu.
+- [x] Reddit: HTTP 429 na dwóch z trzech feedów przy każdym przebiegu.
+      - Objaw w pasku stanu: „Ostatni przebieg z zastrzeżeniami (2)",
+        `reddit-reactjs` i `reddit-localllama` z HTTP 429. Oba zapisane
+        przebiegi w tabeli `runs` wyglądały identycznie — to nie był pech,
+        tylko stan stały.
+      - Przyczyna: Reddit daje na nieuwierzytelnione `.rss` **jedno żądanie
+        na okno ~40–60 s per IP**. Trzy feedy szły sekwencyjnie, ale bez pauzy,
+        więc pierwszy z `sources.json` (`reddit-typescript`) zjadał cały
+        budżet, a dwa kolejne dostawały 429 milisekundy później. Zawsze te same
+        dwa, bo decydowała kolejność w configu.
+      - Drugi błąd: Reddit **nie wysyła `Retry-After`**, tylko
+        `x-ratelimit-reset`. Kod czytał wyłącznie ten pierwszy,
+        `Number(null)` dawało 0, więc wpadał w backoff 1 s → 2 s. Trzy
+        sekundy czekania przeciwko oknu minutowemu — pętla ponawiania była
+        z góry skazana.
+      - Odtworzone z domowego łącza (nie chodziło o IP runnera) i zmierzone
+        sondą co 15 s: 200 o +15 s, 429 o +31 s i +46 s, 200 o +62 s, 429
+        o +78 s i +93 s.
+      - Naprawa w `sources/http.ts`: pauza brana **przed** następnym żądaniem
+        do tego hosta, a nie odczekiwana po odmowie. Kluczowa obserwacja:
+        `x-ratelimit-remaining: 0` i `x-ratelimit-reset` przychodzą także
+        na **udanej** odpowiedzi, więc host sam mówi, ile czekać, zanim
+        cokolwiek się zepsuje. Ponawianie zostaje dla tego, czego nie da się
+        przewidzieć — 5xx i serwerów odmawiających bez wyjaśnienia.
+      - Budżet czekania na źródło: 90 s. Przekroczenie kończy się błędem
+        z własną treścią, a nie `break` — inaczej źródło raportowałoby się
+        jako „HTTP 0", czyli status, którego serwer nigdy nie wysłał.
+        Jeden feed nie może zatrzymać całego przebiegu.
+      - Mapa `nextSlot` jest na poziomie modułu, żeby to, czego nauczy się
+        pierwszy feed Reddita, chroniło dwa następne w tym samym przebiegu.
+      - Zweryfikowane na żywo, prawdziwym żądaniem do Reddita: wszystkie trzy
+        feedy pobrane, `+2s` typescript, `+20s` reactjs (pauza 17 s),
+        `+80s` localllama (pauza 59 s). Koszt: ok. 80 s dłuższy przebieg
+        raz na dwa dni — hosty idą równolegle, więc płaci tylko grupa Reddita.
