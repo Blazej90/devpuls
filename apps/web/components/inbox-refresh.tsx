@@ -7,17 +7,9 @@ import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { setBadge } from "@/lib/badge";
+import { plural } from "@/lib/plural";
 import { formatNextRun } from "@/lib/schedule";
 import { cn } from "@/lib/utils";
-
-/** "1 nowy wpis", "3 nowe wpisy", "5 nowych wpisów" — Polish plural inflection. */
-function formatAdded(count: number): string {
-  if (count === 1) return "1 nowy wpis";
-  const units = count % 10;
-  const teens = count % 100;
-  const fewForm = units >= 2 && units <= 4 && (teens < 12 || teens > 14);
-  return `${count} ${fewForm ? "nowe wpisy" : "nowych wpisów"}`;
-}
 
 /**
  * The refresh itself, shared by the button and the gesture (Phase 11).
@@ -52,7 +44,7 @@ function useRefresh(latestId: number) {
       startTransition(() => router.refresh());
 
       if (added > 0) {
-        toast(formatAdded(added), {
+        toast(plural(added, "nowy wpis", "nowe wpisy", "nowych wpisów"), {
           description: "Skrzynka jest już aktualna.",
           // The new items can easily be outside the current view — another tab,
           // a category, page four. Without a way to the top of the full list

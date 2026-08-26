@@ -325,3 +325,25 @@ Agent aktualizuje ten plik na bieżąco, ale nigdy go nie commituje bez zgody
         nie ozdoba. Dla myszy `title` na opakowaniu ikony.
       - Zweryfikowane na żywo: `/` renderuje 1 robota `text-brand`
         w nagłówku i po jednym szarym na każdą z 8 kart w zakładce „Nowe".
+- [x] Licznik nieprzeczytanych jako klikalna pigułka pod nagłówkiem.
+      - Problem: `Badge` „8 nowych" stał obok logotypu i na telefonie musiał
+        zmieścić się w jednym rzędzie z napisem `text-4xl` i czterema
+        kontrolkami. Rząd kończył się szerokość, a badge lądował, gdzie akurat
+        było miejsce.
+      - Teraz osobny wiersz pod hasłem, na całą szerokość: pigułka w kolorze
+        marki, kropka nieprzeczytanych (ten sam sygnał, co w każdym kliencie
+        poczty), liczba i strzałka w dół.
+      - Klikalna: prowadzi do `/#inbox`, czyli do paska zakładek nad listą.
+        Adres z ukośnikiem, a nie samo `#inbox`, bo licznik ignoruje filtry —
+        z odfiltrowanego widoku albo ze strony czwartej sama kotwica
+        przewinęłaby do listy, w której nie ma tego, co policzono. `/` gubi
+        query string i ląduje na czystej zakładce „Nowe".
+      - Kotwica celuje w zakładki, nie w pierwszą kartę: to zakładka potwierdza,
+        że skok się udał — „Nowe 8" to ta sama liczba, w którą się kliknęło.
+      - Przy okazji `lib/plural.ts`: polska odmiana przez liczebnik była
+        rozpisana osobno w nagłówku i w odświeżaniu, a nowa pigułka byłaby
+        trzecią kopią. Reguła z wyjątkiem (12–14 zachowuje się jak grupa
+        „wiele", mimo końcówki 2–4) w dwóch kopiach prędzej czy później by się
+        rozjechała.
+      - Zweryfikowane na żywo: pigułka renderuje się z `href="/#inbox"`
+        i etykietą „8 nowych wpisów", `id="inbox"` jest na miejscu.

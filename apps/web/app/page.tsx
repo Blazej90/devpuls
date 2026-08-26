@@ -89,8 +89,12 @@ export default async function HomePage({
       <PushPrompt />
 
       {/* The field and the tabs are one control surface, so they sit closer to
-          each other than to the rest of the page. */}
-      <div className="space-y-4">
+          each other than to the rest of the page.
+
+          `#inbox` is where the count in the header links to. It points at the
+          tabs rather than at the first card, because the tab is what confirms
+          the jump landed: "Nowe 8" is the same number that was pressed. */}
+      <div id="inbox" className="scroll-mt-6 space-y-4">
         <InboxSearch {...filter} results={viewCounts[filter.view]} />
         <InboxNav
           {...filter}

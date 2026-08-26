@@ -1,19 +1,10 @@
 import Link from "next/link";
-import { Bot, Info, Rss, Settings } from "lucide-react";
+import { ArrowDown, Bot, Info, Rss, Settings } from "lucide-react";
 
-import { Badge } from "@/components/ui/badge";
 import { Logo } from "@/components/logo";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { BackgroundBeams } from "@/components/ui/background-beams";
-
-/** "1 źródło", "2 źródła", "11 źródeł" — Polish plural inflection. */
-function formatSourceCount(count: number): string {
-  if (count === 1) return "1 źródło";
-  const units = count % 10;
-  const teens = count % 100;
-  const fewForm = units >= 2 && units <= 4 && (teens < 12 || teens > 14);
-  return `${count} ${fewForm ? "źródła" : "źródeł"}`;
-}
+import { plural } from "@/lib/plural";
 
 /**
  * Page header (ADR-0003, Stage 4).
@@ -25,7 +16,7 @@ function formatSourceCount(count: number): string {
  */
 export function Hero({ unread, sources }: { unread: number; sources: number }) {
   const facts = [
-    formatSourceCount(sources),
+    plural(sources, "źródło", "źródła", "źródeł"),
     // Matches the cron in `.github/workflows/ingest.yml` (ADR-0002).
     "sprawdzane co 2 dni",
     "trafność 1–5",
@@ -39,10 +30,7 @@ export function Hero({ unread, sources }: { unread: number; sources: number }) {
 
       <div className="relative z-10 space-y-5">
         <div className="flex items-start justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <Logo />
-            {unread > 0 && <Badge>{unread} nowych</Badge>}
-          </div>
+          <Logo />
           {/* "O aplikacji" as a header link rather than a card at the bottom of
               the list (Stage 5): as a card it looked identical to an item, and
               the more content the app had, the harder it was to reach. */}
@@ -99,6 +87,31 @@ export function Hero({ unread, sources }: { unread: number; sources: number }) {
             </span>
           </p>
         </div>
+
+        {/*
+          The unread count used to be a `Badge` next to the wordmark, where on a
+          phone it had to share one row with a 36px logotype and four controls —
+          the row ran out of width and the badge ended up wherever there was
+          room. Here it has the whole width to itself.
+
+          It is also the one thing in the header worth pressing: it is a link,
+          not a label. `/#inbox` and not just `#inbox`, because the count
+          ignores every filter — from a filtered view or page four the anchor
+          alone would scroll to a list that does not contain what was counted.
+          The address drops the query string and lands on the plain "Nowe" tab.
+        */}
+        {unread > 0 && (
+          <Link
+            href="/#inbox"
+            className="border-brand/30 bg-brand/10 text-brand hover:bg-brand/20 focus-visible:ring-ring inline-flex w-fit items-center gap-2 rounded-full border px-3.5 py-1.5 text-sm font-medium transition-colors focus-visible:ring-1 focus-visible:outline-none"
+          >
+            {/* The unread dot, the same signal every mail client uses — and it
+                keeps the pill from reading as a plain button. */}
+            <span className="bg-brand size-1.5 shrink-0 rounded-full" aria-hidden />
+            {plural(unread, "nowy wpis", "nowe wpisy", "nowych wpisów")}
+            <ArrowDown className="size-4 shrink-0 opacity-70" aria-hidden />
+          </Link>
+        )}
 
         <ul className="text-muted-foreground flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
           {facts.map((fact, index) => (
