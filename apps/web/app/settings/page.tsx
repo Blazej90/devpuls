@@ -10,10 +10,11 @@ import { ThemeToggle } from "@/components/theme-toggle";
 export const metadata: Metadata = { title: "Ustawienia" };
 
 /**
- * Notification settings, behind the gear in the header (Phase 11).
+ * The relevance threshold and the notification settings, behind the gear in the
+ * header (Phase 11).
  *
- * They used to sit above the inbox, where the relevance threshold and the
- * categories were one stray tap away at all times — and each tap wrote to the
+ * They used to sit above the inbox, where the threshold and the categories were
+ * one stray tap away at all times — and each tap wrote to the
  * server immediately. A page of their own for the same reason `/sources` and
  * `/about` exist: a screen visited a few times a year should not take the space
  * that the news needs every day.
@@ -43,10 +44,11 @@ export default function SettingsPage() {
       <div className="space-y-2">
         <h1 className="text-2xl font-semibold tracking-tight">Ustawienia</h1>
         <p className="text-muted-foreground max-w-prose text-sm leading-relaxed">
-          Ustawienia są przypisane do subskrypcji tego urządzenia, więc telefon
-          i laptop mogą mieć różne progi i kategorie. Nie dotyczą skrzynki —
-          w niej widać wszystkie wpisy niezależnie od tego, o których przyszło
-          powiadomienie. Wyciszanie całych źródeł działa globalnie i mieszka na
+          Ustawienia są przypisane do tego urządzenia, więc telefon i laptop mogą
+          mieć różne progi i kategorie. Próg trafności filtruje skrzynkę i
+          powiadomienia naraz — przy 4+ zostają wpisy 4 i 5, przy 3+ także
+          trójki. Kategorie zawężają same powiadomienia; w skrzynce masz do tego
+          filtr nad listą. Wyciszanie całych źródeł działa globalnie i mieszka na
           osobnej stronie{" "}
           <Link href="/sources" className="text-foreground underline underline-offset-2">
             Źródła

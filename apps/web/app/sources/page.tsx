@@ -8,6 +8,7 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { Separator } from "@/components/ui/separator";
 import { formatDate } from "@/lib/date-groups";
 import { plural } from "@/lib/plural";
+import { readMinRelevance } from "@/lib/preferences";
 import { listSourceStats, type SourceStat } from "@/lib/sources";
 
 export const metadata: Metadata = { title: "Źródła" };
@@ -72,7 +73,9 @@ function SourceRow({ source }: { source: SourceStat }) {
  * exists — settings do not compete with content for the same space.
  */
 export default async function SourcesPage() {
-  const sources = await listSourceStats();
+  // The same floor the inbox uses — a count that promised items the list
+  // refuses to show would only ever be read as a bug.
+  const sources = await listSourceStats(await readMinRelevance());
   const active = sources.filter((source) => source.mutedAt === null);
   const muted = sources.filter((source) => source.mutedAt !== null);
 

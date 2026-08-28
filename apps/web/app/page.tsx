@@ -16,10 +16,12 @@ import {
   listItems,
   parsePage,
   parseQuery,
+  parseSort,
   parseSource,
   parseTopic,
   parseView,
 } from "@/lib/items";
+import { readMinRelevance } from "@/lib/preferences";
 import { listSources } from "@/lib/sources";
 import { getLastRunSafe } from "@/lib/runs";
 
@@ -41,7 +43,14 @@ export default async function HomePage({
     topic: parseTopic(params.topic),
     query: parseQuery(params.q),
     source: parseSource(params.source),
+    sort: parseSort(params.sort),
   };
+
+  // The relevance floor is a device setting, not a URL one (`lib/relevance.ts`):
+  // it belongs to whoever is reading, not to the link they might share. Every
+  // query below takes it, so the list, the tab counters and the icon badge
+  // cannot end up describing different inboxes.
+  const minRelevance = await readMinRelevance();
 
   const [
     { items, hasMore },
@@ -52,9 +61,9 @@ export default async function HomePage({
     lastRun,
     latestId,
   ] = await Promise.all([
-    listItems(filter, page),
-    counts(filter),
-    countUnread(),
+    listItems(filter, minRelevance, page),
+    counts(filter, minRelevance),
+    countUnread(minRelevance),
     countSources(),
     // Only needed to label the chip, so it is not worth a query when no
     // source filter is on.
@@ -62,7 +71,7 @@ export default async function HomePage({
     getLastRunSafe(),
     // The reference point for the refresh: everything above this id arrived
     // after this render (Phase 11).
-    latestItemId(),
+    latestItemId(minRelevance),
   ]);
 
   const activeSource = sourceNames.find((entry) => entry.id === filter.source) ?? null;

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { countUnread, restore, softDelete } from "@/lib/items";
+import { readMinRelevance } from "@/lib/preferences";
 
 export const dynamic = "force-dynamic";
 
@@ -38,5 +39,8 @@ export async function POST(request: Request) {
   // Deleting an unread item changes the count on the PWA icon badge, so we send
   // it back in the same response — otherwise the badge would lie until the next
   // refresh.
-  return NextResponse.json({ ok: true, unread: await countUnread() });
+  return NextResponse.json({
+    ok: true,
+    unread: await countUnread(await readMinRelevance()),
+  });
 }

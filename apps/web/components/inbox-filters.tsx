@@ -5,10 +5,13 @@ import { MuteButton } from "@/components/source-mute";
 import { cn } from "@/lib/utils";
 import {
   PAGE_SIZE,
+  SORTS,
+  SORT_LABELS,
   TOPICS,
   TOPIC_LABELS,
   VIEWS,
   VIEW_LABELS,
+  type Sort,
   type Topic,
   type View,
 } from "@/lib/items";
@@ -28,12 +31,14 @@ export function hrefFor({
   topic,
   query,
   source,
+  sort,
   page = 1,
 }: {
   view: View;
   topic: Topic | null;
   query: string | null;
   source: string | null;
+  sort: Sort;
   /** Omitted on purpose wherever the page should reset — see below. */
   page?: number;
 }): string {
@@ -43,6 +48,7 @@ export function hrefFor({
   if (topic) params.set("topic", topic);
   if (query) params.set("q", query);
   if (source) params.set("source", source);
+  if (sort !== "recency") params.set("sort", sort);
   if (page > 1) params.set("page", String(page));
 
   const search = params.toString();
@@ -68,6 +74,7 @@ export function InboxNav({
   topic,
   query,
   source,
+  sort,
   sourceName,
   sourceMuted,
   counts,
@@ -76,6 +83,7 @@ export function InboxNav({
   topic: Topic | null;
   query: string | null;
   source: string | null;
+  sort: Sort;
   /** Label for the active source; `null` when the id matches nothing. */
   sourceName: string | null;
   /** Whether that source is muted — decides the direction of the button. */
@@ -115,7 +123,7 @@ export function InboxNav({
             return (
               <li key={entry} className="shrink-0">
                 <Link
-                  href={hrefFor({ view: entry, topic, query, source })}
+                  href={hrefFor({ view: entry, topic, query, source, sort })}
                   aria-current={active ? "page" : undefined}
                   className={cn(
                     "focus-visible:ring-ring flex items-center gap-2 border-b-2 px-3 py-2.5",
@@ -147,6 +155,17 @@ export function InboxNav({
         Category chips. Until Stage 3 they sat in the header as plain `Badge`s
         with no click handling — they looked exactly like the filter the app
         was missing.
+
+        The active one is filled with the brand colour, not with `primary`.
+        `primary` is near-black in light and near-white in dark, so the selected
+        category came out as the heaviest thing on the screen and said nothing
+        about which app it belonged to. Brand is what already marks a selection
+        here — the tab underline and its counter — and `--brand-foreground`
+        exists precisely so the colour can also be a fill: 4.9:1 in light,
+        7.5:1 in dark, both above the 4.5:1 that 12px text needs.
+
+        The hover on an inactive chip is a fifth of the same colour, so the row
+        hints at what the click is about to do instead of just lighting up grey.
       */}
       <nav aria-label="Filtr kategorii" className="flex flex-wrap gap-2">
         {([null, ...TOPICS] as (Topic | null)[]).map((entry) => {
@@ -154,14 +173,15 @@ export function InboxNav({
           return (
             <Link
               key={entry ?? "all"}
-              href={hrefFor({ view, topic: entry, query, source })}
+              href={hrefFor({ view, topic: entry, query, source, sort })}
               aria-current={active ? "true" : undefined}
               className={cn(
-                "focus-visible:ring-ring rounded-full border px-3 py-1 text-xs font-medium",
-                "transition-colors focus-visible:ring-1 focus-visible:outline-none",
+                "focus-visible:ring-ring inline-flex items-center rounded-full border px-3 py-1.5",
+                "text-xs font-medium whitespace-nowrap transition-colors",
+                "focus-visible:ring-1 focus-visible:outline-none",
                 active
-                  ? "bg-primary text-primary-foreground border-primary"
-                  : "border-border text-muted-foreground hover:text-foreground hover:border-foreground/30",
+                  ? "border-brand bg-brand text-brand-foreground shadow-sm"
+                  : "border-border text-muted-foreground hover:border-brand/30 hover:bg-brand/5 hover:text-foreground",
               )}
             >
               {entry === null ? "Wszystkie" : TOPIC_LABELS[entry]}
@@ -178,10 +198,51 @@ export function InboxNav({
         chip — the whole chip is the link that removes it, so there is one
         target rather than a label with a tiny cross next to it.
       */}
+      {/*
+        The order. A segmented pair rather than a `select`: there are exactly two
+        answers, and a native picker on a phone would put a full-screen sheet in
+        front of a choice that is one tap either way.
+
+        It sits last, right above the list, because it is the control whose
+        effect starts at the first card below it — and it is right-aligned so it
+        does not read as an eighth category chip.
+
+        Track and thumb, the shape shadcn gives its own tabs, rather than the
+        pill of a category chip: this switches how the same items are ordered,
+        it does not take any of them away, and two controls that do different
+        things should not look identical. The thumb carries the brand colour as
+        text only — a second solid brand fill in the same block would fight the
+        active category for the eye.
+      */}
+      <nav aria-label="Kolejność wpisów" className="flex justify-end">
+        <div className="bg-muted border-border/60 inline-flex rounded-full border p-0.5">
+          {SORTS.map((entry) => {
+            const active = entry === sort;
+            return (
+              <Link
+                key={entry}
+                href={hrefFor({ view, topic, query, source, sort: entry })}
+                aria-current={active ? "true" : undefined}
+                className={cn(
+                  "focus-visible:ring-ring rounded-full px-3 py-1.5 text-xs font-medium",
+                  "whitespace-nowrap transition-colors",
+                  "focus-visible:ring-1 focus-visible:outline-none",
+                  active
+                    ? "bg-background text-brand shadow-sm"
+                    : "text-muted-foreground hover:text-foreground",
+                )}
+              >
+                {SORT_LABELS[entry]}
+              </Link>
+            );
+          })}
+        </div>
+      </nav>
+
       {source && (
         <div className="flex flex-wrap items-center gap-2">
           <Link
-            href={hrefFor({ view, topic, query, source: null })}
+            href={hrefFor({ view, topic, query, source: null, sort })}
             className="border-brand/40 bg-brand/10 text-foreground hover:border-brand focus-visible:ring-ring inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-colors focus-visible:ring-1 focus-visible:outline-none"
           >
             <span className="text-muted-foreground font-normal">Źródło:</span>
@@ -217,6 +278,7 @@ export function Pagination({
   topic,
   query,
   source,
+  sort,
   page,
   hasMore,
   shown,
@@ -226,6 +288,7 @@ export function Pagination({
   topic: Topic | null;
   query: string | null;
   source: string | null;
+  sort: Sort;
   page: number;
   hasMore: boolean;
   shown: number;
@@ -243,7 +306,7 @@ export function Pagination({
       className="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-4"
     >
       <PageLink
-        href={hrefFor({ view, topic, query, source, page: page - 1 })}
+        href={hrefFor({ view, topic, query, source, sort, page: page - 1 })}
         enabled={page > 1}
         label="Poprzednia"
       >
@@ -256,7 +319,7 @@ export function Pagination({
       </p>
 
       <PageLink
-        href={hrefFor({ view, topic, query, source, page: page + 1 })}
+        href={hrefFor({ view, topic, query, source, sort, page: page + 1 })}
         enabled={hasMore}
         label="Następna"
       >

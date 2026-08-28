@@ -400,3 +400,107 @@ Agent aktualizuje ten plik na bieżąco, ale nigdy go nie commituje bez zgody
       - Uwaga na przyszłość: `app/sources/page.tsx` ma końce linii CRLF,
         w odróżnieniu od komponentów w `components/`. Edycje przez skrypt
         muszą to uwzględniać.
+- [x] Próg trafności rządzi także skrzynką, nie tylko powiadomieniami.
+      - Objaw: przy zapisanym „Trafność 4+" do skrzynki dalej wpadały wpisy
+        z trafnością 3.
+      - Przyczyna: dwa niezależne progi. `push.ts` filtrował digest po
+        `push_subscriptions.min_relevance` (w bazie wszystkie cztery
+        subskrypcje miały 4 — ustawienie zapisywało się poprawnie), a lista
+        miała własną, zaszytą na sztywno stałą `MIN_RELEVANCE = 3`
+        w `lib/items.ts`. Karta ustawień wprost pisała „Nie dotyczą skrzynki".
+      - Rozwiązanie: jeden wybór, dwa magazyny, bo czytelnicy są w dwóch
+        światach. Ciasteczko `min-relevance` (odczyt na serwerze przez
+        `lib/preferences.ts`) filtruje skrzynkę; kolumna w bazie zostaje dla
+        agenta, który chodzi w GitHub Actions i przeglądarki nie widzi.
+        Jedno „Zapisz" pisze w oba miejsca, więc nie mogą się rozjechać.
+      - Ciasteczko, nie `localStorage`: strona renderuje się na serwerze, więc
+        próg musi przyjechać **razem z żądaniem** — inaczej lista mrugałaby
+        z jednego progu na drugi. Nie kolumna po urządzeniu, bo laptop bez
+        powiadomień nie ma żadnego wiersza subskrypcji.
+      - `lib/relevance.ts` (stałe, parsowanie, zapis ciasteczka) jest wolne od
+        `next/headers`, bo importuje je komponent kliencki; odczyt requestu
+        siedzi osobno w `lib/preferences.ts`. To samo dotyczy `lib/items.ts` —
+        stąd próg wędruje tam argumentem, a nie odczytem z ciasteczka.
+      - Przy okazji karta ustawień działa bez włączonych powiadomień: sekcja
+        progu jest zawsze aktywna (zapisuje samo ciasteczko), sekcja kategorii
+        pokazuje się tylko przy subskrypcji, bo zawęża wyłącznie digest.
+        Wcześniej cała karta była zastąpiona komunikatem „ustawisz po włączeniu
+        powiadomień".
+      - Przy wczytaniu wygrywa baza i **nadpisuje** ciasteczko — to naprawia
+        urządzenie, które wybrało próg, zanim skrzynka zaczęła go respektować.
+      - Domyślna wartość bez ciasteczka to 4, tak samo jak DEFAULT kolumny
+        z migracji 002 i `RELEVANCE_THRESHOLD` agenta.
+      - Poziomy 2-5; 1 celowo nieosiągalne — agent daje 1 wpisom nie na temat,
+        a lista bez żadnej podłogi to surowy feed, przed którym appka broni.
+      - Świadomy kompromis: próg działa jednakowo we wszystkich zakładkach,
+        więc oznaczona gwiazdką „trójka" znika z „Ulubionych" po podniesieniu
+        progu do 4 (wraca po obniżeniu — nic nie jest kasowane). Wyjątek dla
+        gwiazdki rozjechałby liczniki nad listą, które liczą się jednym
+        zapytaniem.
+      - `router.refresh()` po zapisie: strony serwerowe siedzą w cache routera
+        ze starym progiem wpieczonym w HTML.
+      - Zweryfikowane na żywo (dev, `?view=all`, karty na pierwszej stronie
+        i liczniki zakładek):
+        brak ciasteczka → same czwórki; `=2` → 2/3/4 (Wszystkie 191);
+        `=3` → 3 i 4; `=4` → same czwórki (Wszystkie 76); `=5` → same piątki
+        (Wszystkie 19); wartość spoza listy → domyślne 4.
+        `/api/items/updates` i `/sources` liczą tym samym progiem
+        (191 vs 19 wpisów).
+      - Niezweryfikowane: sam zapis z karty ustawień w przeglądarce (wymaga
+        aktywnej subskrypcji push i gestu na urządzeniu).
+- [x] Sortowanie listy: „Najnowsze" / „Najtrafniejsze".
+      - Powód: agent stawia 5 rzadko (19 wpisów na 239, ~8%) i prawie zawsze
+        za duże wydania TypeScripta. Najnowsza piątka jest z 8 lipca 2026, więc
+        przy sortowaniu po dacie i progu 3+ pierwsza z nich siedzi na pozycji
+        96 (strona 4). Wyglądało to jak zjedzone piątki, a było zakopanie.
+      - `sort=relevance` w URL, obok `view`, `topic`, `q`, `source` (ADR-0003):
+        kolejność przeżywa odświeżenie i da się wysłać linkiem. Domyślne
+        `recency` nie trafia do adresu, więc czysty adres to dalej `/`.
+      - SQL: `relevance_score DESC NULLS LAST, recency DESC`. Drugi klucz jest
+        obowiązkowy — przy pięćdziesięciu równych czwórkach kolejność bez niego
+        zależy od planera, a granica strony przy OFFSET potrafiłaby się
+        przesunąć między żądaniami.
+      - Nagłówki sekcji idą za kolejnością: przy dacie „Dziś / Wczoraj /
+        W tym tygodniu / Starsze", przy trafności „Trafność 5 / 4 / 3".
+        Daty nad rankingiem rozsypałyby dokładnie ten porządek, który ranking
+        ma pokazać — lipcowa piątka lądowałaby w „Starsze" pod trzema dniami
+        czwórek. `groupByRelevance` siedzi w `lib/relevance.ts` obok progu,
+        `Group.bucket` rozszerzone z `Bucket` na `string`.
+      - Kontrolka: para pigułek w obramowaniu, wyrównana do prawej, jako
+        ostatni wiersz nawigacji — tuż nad listą, na którą działa. Nie `select`:
+        odpowiedzi są dwie, a natywny picker na telefonie otwiera pełnoekranowy
+        arkusz dla wyboru na jedno tapnięcie.
+      - Zweryfikowane na żywo (dev, próg 3+):
+        `/?view=all` → karty w kolejności dat (3/4 przemieszane), sekcje
+        „Wczoraj 20", „W tym tygodniu 10";
+        `/?view=all&sort=relevance` → 19 piątek, potem czwórki, sekcje
+        „Trafność 5 19", „Trafność 4 11";
+        strona 2 kontynuuje na czwórkach;
+        `/?sort=relevance` (zakładka Nowe) → jedyna nieprzeczytana piątka
+        na pierwszej pozycji;
+        `sort=nonsense` → cicho wraca do dat;
+        zakładki, kategorie, paginacja i chip źródła niosą `sort` dalej.
+- [x] Chipy kategorii i przełącznik sortowania w kolorach aplikacji.
+      - Objaw: aktywny chip był `bg-primary` — prawie czarny w jasnym motywie
+        i prawie biały w ciemnym. Najcięższy element na ekranie, a przy tym
+        nieodróżnialny od dowolnej innej appki na shadcn.
+      - Zamiast tego wypełnienie kolorem marki: `bg-brand text-brand-foreground`.
+        Marka już oznacza wybór w tej appce (podkreślenie aktywnej zakładki
+        i jej licznik), a token `--brand-foreground` istnieje właśnie po to, żeby
+        koloru dało się użyć jako tła. Kontrast 4,9:1 w jasnym i 7,5:1
+        w ciemnym — powyżej 4,5:1 wymaganego dla tekstu 12 px.
+      - Hover nieaktywnego chipa to `hover:bg-brand/5` + `hover:border-brand/30`,
+        czyli zapowiedź stanu aktywnego, a nie ogólne rozjaśnienie na szaro.
+      - Sortowanie dostało kształt „tor + suwak" (jak zakładki w shadcn), a nie
+        pigułkę chipa: przełącza kolejność tych samych wpisów, niczego nie
+        odbiera, a dwie kontrolki o różnym działaniu nie powinny wyglądać
+        identycznie. Suwak niesie markę wyłącznie w tekście — drugie pełne
+        wypełnienie w tym samym bloku biłoby się o wzrok z aktywną kategorią.
+      - Przy okazji `py-1` → `py-1.5` (cel dotykowy z ~24 px na ~28 px)
+        i `whitespace-nowrap`, żeby „TypeScript" nie łamał się w połowie.
+      - Zweryfikowane: wszystkie użyte klasy `brand` faktycznie trafiają do
+        zbudowanego CSS (Tailwind grupuje selektory, więc `.bg-brand` siedzi
+        w `.bg-brand,.bg-brand\/5`), render potwierdza klasy na aktywnym
+        chipie i na aktywnej pigułce sortowania.
+      - Niezweryfikowane wzrokowo: oba motywy na żywo — zmiana jest oparta
+        na tokenach z `globals.css`, nie na dobranych ręcznie kolorach.

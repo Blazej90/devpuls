@@ -6,7 +6,7 @@ import { Loader2, Search, X } from "lucide-react";
 
 import { Input } from "@/components/ui/input";
 import { hrefFor } from "@/components/inbox-filters";
-import { VIEW_LABELS, type Topic, type View } from "@/lib/items";
+import { VIEW_LABELS, type Sort, type Topic, type View } from "@/lib/items";
 
 /**
  * How long we wait after the last keystroke. The page is `force-dynamic`, so
@@ -33,12 +33,14 @@ export function InboxSearch({
   topic,
   query,
   source,
+  sort,
   results,
 }: {
   view: View;
   topic: Topic | null;
   query: string | null;
   source: string | null;
+  sort: Sort;
   /** Hits in the active tab — the number reported next to the field. */
   results: number;
 }) {
@@ -74,10 +76,12 @@ export function InboxSearch({
         // history entry and the back button would spell the phrase backwards.
         // `scroll: false`, because the field stays where it is and what changes
         // is the list below it.
-        router.replace(hrefFor({ view, topic, source, query: next }), { scroll: false });
+        router.replace(hrefFor({ view, topic, source, sort, query: next }), {
+          scroll: false,
+        });
       });
     },
-    [router, view, topic, source],
+    [router, view, topic, source, sort],
   );
 
   useEffect(() => {

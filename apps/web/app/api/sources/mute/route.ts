@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { countUnread } from "@/lib/items";
+import { readMinRelevance } from "@/lib/preferences";
 import { setMuted } from "@/lib/sources";
 
 export const dynamic = "force-dynamic";
@@ -36,5 +37,8 @@ export async function POST(request: Request) {
 
   // Muting hides every item from that source, so the badge on the PWA icon
   // changes with it — same contract as the item routes.
-  return NextResponse.json({ ok: true, unread: await countUnread() });
+  return NextResponse.json({
+    ok: true,
+    unread: await countUnread(await readMinRelevance()),
+  });
 }
