@@ -10,7 +10,7 @@
     "dev": "pnpm --filter web dev",
     "build": "pnpm --filter web build",
     "start": "pnpm --filter web start",
-    "lint": "pnpm --recursive lint",
+    "lint": "pnpm --recursive --if-present run lint",
     "agent:migrate": "pnpm --filter @devpuls/agent migrate",
     "agent:ingest": "pnpm --filter @devpuls/agent ingest"
   }
