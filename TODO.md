@@ -526,3 +526,29 @@ Agent aktualizuje ten plik na bieżąco, ale nigdy go nie commituje bez zgody
         **przed** zapisem.
       - Zweryfikowane: sekcja renderuje się na `/about` w całości, `tsc`,
         `eslint` i `next build` czyste.
+- [x] `README.md` — repo nie miało żadnego wejścia dla człowieka z zewnątrz.
+      - Podział ról: README odpowiada „co to jest, jak odpalić, jak wdrożyć",
+        `docs/ARCHITECTURE.md` zostaje przy „jak jest zbudowane i dlaczego".
+        Bez powielania — README linkuje, nie streszcza.
+      - Diagram przepływu w mermaidzie (GitHub renderuje natywnie): źródła →
+        Actions → fetch → dedup po URL → Claude → Neon → push i skrzynka.
+      - Sekcja „kilka decyzji, które warto znać przed czytaniem kodu" zamiast
+        suchej listy funkcji: digest zamiast pusha na wpis, stan widoku w URL,
+        całe SQL wpisów w jednym module, dwa magazyny progu trafności,
+        wyciszanie globalne — każda z linkiem do właściwego ADR-a.
+      - Zweryfikowane przed wpisaniem, a nie przepisane z pamięci: skrypty
+        (`pnpm --filter web exec tsc --noEmit` i
+        `pnpm --filter @devpuls/agent typecheck` faktycznie przechodzą),
+        zachowanie `/api/health` (503 tylko dla `failed` i ciszy > 72 h),
+        `syncSources` wołane w `pipeline.ts` przy każdym przebiegu,
+        liczba i typy źródeł (11: 5 rss, 5 atom, 1 scrape), cron z workflow.
+      - Fałszywy trop po drodze: rootowe `pnpm lint` zwracało
+        `ERR_PNPM_RECURSIVE_EXEC_FIRST_FAIL: Command "eslint" not found`
+        i wylądowało w README jako udokumentowana usterka. Po sprawdzeniu przez
+        `rtk proxy` okazało się, że komenda działa poprawnie (`Scope: 2 of 3`,
+        `apps/web lint: Done`) — błąd produkowała warstwa RTK, nie repo. Notka
+        z README usunięta. Wniosek na przyszłość: zanim opiszesz komendę jako
+        zepsutą, sprawdź ją przez `rtk proxy`.
+      - Rootowy skrypt mimo to doprecyzowany na `pnpm --recursive --if-present
+        run lint`: jawne `run` nie może wpaść w ścieżkę `exec`, a `--if-present`
+        pomija pakiet bez tego skryptu, gdyby doszedł kolejny.
