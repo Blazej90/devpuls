@@ -25,12 +25,13 @@ Aplikacja typu PWA, która:
 
 ```
 devpuls/
+├── README.md                      # wejście do projektu: co to jest, jak odpalić
 ├── CLAUDE.md
 ├── TODO.md
 ├── .gitignore
-├── .env.example                  # agent: ANTHROPIC_API_KEY, DATABASE_URL, VAPID
-├── pnpm-workspace.yaml           # workspaces + allowBuilds (zgody na postinstall)
-├── package.json                  # root: packageManager pnpm, skrypty proxujące
+├── .env.example                   # agent: ANTHROPIC_API_KEY, DATABASE_URL, VAPID
+├── pnpm-workspace.yaml            # workspaces + allowBuilds (zgody na postinstall)
+├── package.json                   # root: packageManager pnpm, skrypty proxujące
 ├── pnpm-lock.yaml
 ├── docs/
 │   ├── ARCHITECTURE.md
@@ -38,81 +39,96 @@ devpuls/
 │       ├── template.md
 │       ├── 0001-poc-architecture.md
 │       ├── 0002-digest-and-inbox.md
-│       └── 0003-inbox-ux-rebuild.md
+│       ├── 0003-inbox-ux-rebuild.md
+│       └── 0004-source-muting.md
 ├── apps/
-│   └── web/                      # Next.js PWA
+│   └── web/                       # Next.js PWA
 │       ├── package.json
-│       ├── tsconfig.json         # alias @/* -> apps/web/*
+│       ├── tsconfig.json          # alias @/* -> apps/web/*
 │       ├── next.config.ts
-│       ├── postcss.config.mjs    # @tailwindcss/postcss (Tailwind v4)
-│       ├── eslint.config.mjs     # flat config, eslint-config-next
-│       ├── components.json       # config shadcn CLI (style new-york, aliasy)
-│       ├── .env.example          # web: NEXT_PUBLIC_VAPID_PUBLIC_KEY, DATABASE_URL
+│       ├── postcss.config.mjs     # @tailwindcss/postcss (Tailwind v4)
+│       ├── eslint.config.mjs      # flat config, eslint-config-next
+│       ├── components.json        # config shadcn CLI (style new-york, aliasy)
+│       ├── .env.example           # web: NEXT_PUBLIC_VAPID_PUBLIC_KEY, DATABASE_URL
 │       ├── app/
-│       │   ├── layout.tsx        # <html lang="pl">, metadata, viewport, bootstrap PWA
-│       │   ├── page.tsx
-│       │   ├── icon.svg          # favicon (konwencja Next)
-│       │   ├── about/page.tsx    # opis appki + nota autora
-│       │   ├── globals.css       # @theme + tokeny kolorów (light/dark)
+│       │   ├── layout.tsx         # <html lang="pl">, metadata, viewport, bootstrap PWA
+│       │   ├── page.tsx           # skrzynka
+│       │   ├── icon.svg           # favicon (konwencja Next)
+│       │   ├── globals.css        # @theme + tokeny kolorów (light/dark)
+│       │   ├── about/page.tsx     # opis appki, co zapamiętuje, nota autora
+│       │   ├── settings/page.tsx  # próg trafności, kategorie, zgoda na push
+│       │   ├── sources/page.tsx   # lista źródeł + wyciszanie (ADR-0004)
 │       │   └── api/
-│       │       ├── health/route.ts           # GET stan pipeline'u (200/503)
-│       │       ├── items/read/route.ts       # POST oznaczenie jako przeczytane
-│       │       ├── items/delete/route.ts     # POST miękkie usunięcie + cofnięcie
-│       │       ├── items/star/route.ts       # POST gwiazdka (ulubione)
+│       │       ├── health/route.ts          # GET stan pipeline'u (200/503)
+│       │       ├── items/read/route.ts      # POST przeczytane / cofnięcie
+│       │       ├── items/delete/route.ts    # POST miękkie usunięcie + cofnięcie
+│       │       ├── items/star/route.ts      # POST gwiazdka (ulubione)
+│       │       ├── items/updates/route.ts   # GET „co przyszło od czasu X"
+│       │       ├── sources/mute/route.ts    # POST wyciszenie źródła
 │       │       └── push/
-│       │           ├── subscribe/route.ts    # POST + DELETE subskrypcji
-│       │           └── settings/route.ts     # POST odczyt, PATCH zapis ustawień
+│       │           ├── subscribe/route.ts   # POST + DELETE subskrypcji
+│       │           └── settings/route.ts    # POST odczyt, PATCH zapis ustawień
 │       ├── components/
-│       │   ├── ui/               # button, card, badge, checkbox, toggle(-group),
-│       │   │                   #   separator, sonner, background-beams
-│       │   ├── pwa/              # sw, prompt instalacji, zgoda i ustawienia pushy
-│       │   ├── inbox.tsx         # skrzynka: grupy dat, zaznaczanie, usuwanie
-│       │   ├── inbox-filters.tsx # zakładki i chipy kategorii (linki)
-│       │   ├── hero.tsx          # nagłówek: logo, claim, pasek faktów
-│       │   ├── logo.tsx          # znak pulsu (SVG, currentColor)
-│       │   ├── scroll-to-top.tsx # powrót na górę przy długich listach
-│       │   ├── theme-provider.tsx / theme-toggle.tsx
-│       │   ├── run-status.tsx    # pasek zdrowia ostatniego przebiegu
-│       │   ├── theme-provider.tsx # next-themes, klasa `.dark` na <html>
-│       │   └── theme-toggle.tsx  # segment system / jasny / ciemny
+│       │   ├── ui/                # shadcn: button, card, badge, checkbox, input,
+│       │   │                      #   toggle(-group), separator, sonner, background-beams
+│       │   ├── pwa/               # rejestracja SW, prompt instalacji, zgoda
+│       │   │                      #   i ustawienia powiadomień
+│       │   ├── inbox.tsx          # skrzynka: sekcje, zaznaczanie, usuwanie
+│       │   ├── inbox-filters.tsx  # zakładki, chipy kategorii, sortowanie, strony
+│       │   ├── inbox-search.tsx   # pole wyszukiwania (debounce, adres)
+│       │   ├── inbox-refresh.tsx  # pull-to-refresh + przycisk odświeżenia
+│       │   ├── highlight.tsx      # podświetlenie trafień frazy
+│       │   ├── source-mute.tsx    # przycisk wyciszenia źródła
+│       │   ├── hero.tsx           # nagłówek: logo, claim, licznik nieprzeczytanych
+│       │   ├── logo.tsx           # znak pulsu (SVG, currentColor)
+│       │   ├── run-status.tsx     # pasek zdrowia ostatniego przebiegu
+│       │   ├── scroll-to-top.tsx  # powrót na górę przy długich listach
+│       │   └── theme-provider.tsx / theme-toggle.tsx
 │       ├── lib/
-│       │   ├── utils.ts          # cn() — wymagane przez shadcn/Aceternity
-│       │   ├── db.ts             # klient Neona dla route handlerów
-│       │   ├── items.ts          # cała selekcja i zapisy wpisów (ADR-0003)
-│       │   ├── date-groups.ts    # kubełki dat + formatowanie, strefa przypięta
-│       │   └── runs.ts           # ostatni przebieg agenta + próg „ciszy"
+│       │   ├── utils.ts           # cn() — wymagane przez shadcn/Aceternity
+│       │   ├── db.ts              # klient Neona dla route handlerów
+│       │   ├── items.ts           # cała selekcja i zapisy wpisów (ADR-0003)
+│       │   ├── sources.ts         # lista źródeł, liczniki, wyciszanie
+│       │   ├── relevance.ts       # próg: poziomy, ciasteczko, sekcje po trafności
+│       │   ├── preferences.ts     # odczyt ciasteczka progu po stronie serwera
+│       │   ├── date-groups.ts     # kubełki dat + formatowanie, strefa przypięta
+│       │   ├── schedule.ts        # kiedy najbliższy przebieg (cron powtórzony)
+│       │   ├── plural.ts          # polska odmiana przez liczebnik
+│       │   ├── badge.ts           # licznik na ikonie PWA
+│       │   └── runs.ts            # ostatni przebieg agenta + próg „ciszy"
 │       └── public/
 │           ├── manifest.json
-│           ├── sw.js             # push + notificationclick + cache powłoki
+│           ├── sw.js              # push + notificationclick + cache powłoki
 │           ├── icon-192.png
 │           ├── icon-512.png
 │           └── apple-touch-icon.png
 ├── packages/
-│   └── agent/                    # pipeline ingestion + Claude + push
-│       ├── package.json          # skrypty `ingest` / `migrate` (tsx)
-│       ├── tsconfig.json         # alias @/* -> packages/agent/src/*
+│   └── agent/                     # pipeline ingestion + Claude + push
+│       ├── package.json           # skrypty `ingest` / `migrate` (tsx)
+│       ├── tsconfig.json          # alias @/* -> packages/agent/src/*
 │       ├── sql/
-│       │   ├── 001_init.sql     # schemat startowy (idempotentny DDL)
+│       │   ├── 001_init.sql       # schemat startowy (idempotentny DDL)
 │       │   ├── 002_topics_and_settings.sql
 │       │   ├── 003_read_state.sql
-│       │   ├── 004_run_log.sql  # tabela `runs` — dziennik zdrowia
+│       │   ├── 004_run_log.sql    # tabela `runs` — dziennik zdrowia
 │       │   ├── 005_soft_delete_and_recency.sql
 │       │   ├── 006_favourites.sql
-│       │   └── 007_rename_topic_other.sql
+│       │   ├── 007_rename_topic_other.sql
+│       │   └── 008_mute_sources.sql
 │       ├── config/
 │       │   └── sources.json
 │       └── src/
 │           ├── sources/
-│           │   ├── index.ts      # dispatch po `type`
-│           │   ├── http.ts       # fetch + retry na 429/5xx
+│           │   ├── index.ts       # dispatch po `type`
+│           │   ├── http.ts        # fetch + tempo pod limity hosta
 │           │   ├── rss.ts
 │           │   ├── atom.ts
-│           │   └── scrape.ts     # HTML -> JSON przez Claude
+│           │   └── scrape.ts      # HTML -> JSON przez Claude
 │           ├── types.ts
 │           ├── config.ts
 │           ├── anthropic.ts
 │           ├── pipeline.ts
-│           ├── monitor.ts     # zdrowie przebiegu + adnotacje GitHub Actions
+│           ├── monitor.ts         # zdrowie przebiegu + adnotacje GitHub Actions
 │           ├── migrate.ts
 │           ├── claude.ts
 │           ├── push.ts
@@ -127,10 +143,17 @@ devpuls/
 - `src/sources/*.ts` — po jednym module fetchującym na typ źródła (`rss.ts`, `atom.ts`,
   `scrape.ts`). Każdy zwraca ten sam znormalizowany kształt `{ sourceId, url, title,
   publishedAt }`, niezależnie od formatu wejściowego.
-- `src/pipeline.ts` — orkiestracja: wczytaj `config/sources.json` → pobierz każde źródło →
-  odrzuć już widziane (po URL) → dla nowych wywołaj `claude.ts` → zapisz do bazy → wyślij
-  **jeden digest** na przebieg (ADR-0002) → zapisz wiersz w `runs`. Wyjątek nie kończy
-  procesu natychmiast: najpierw trzeba jeszcze zapisać, że przebieg padł.
+- `src/pipeline.ts` — orkiestracja: wczytaj `config/sources.json` → odrzuć źródła
+  wyciszone (ADR-0004; wyciszone nie są w ogóle pobierane, więc nie kosztują ani żądania,
+  ani wywołania Claude) → pobierz resztę → odrzuć już widziane (po URL) → dla nowych
+  wywołaj `claude.ts` → zapisz do bazy → wyślij **jeden digest** na przebieg (ADR-0002) →
+  zapisz wiersz w `runs`. Źródła grupowane po hoście: różne hosty równolegle, ten sam host
+  po kolei. Wyjątek nie kończy procesu natychmiast: najpierw trzeba jeszcze zapisać, że
+  przebieg padł.
+- `src/sources/http.ts` — jedno miejsce, które faktycznie wychodzi do sieci, i jedyne, które
+  wie o limitach hosta. Pauza jest brana **przed** kolejnym żądaniem do tego samego hosta,
+  na podstawie nagłówków `x-ratelimit-*`, a nie odczekiwana po odmowie (szczegóły w sekcji 5).
+  Ponawianie zostaje dla tego, czego nie da się przewidzieć: 5xx i 429 bez wyjaśnienia.
 - `src/claude.ts` — jedno wywołanie Claude API na artykuł: ocena trafności (1-5) względem
   profilu zainteresowań (TypeScript/React/JS/Fullstack/AI) + streszczenie PL (2-3 zdania) +
   zachowany oryginalny link.
@@ -180,13 +203,23 @@ Pełny, maszynowo czytelny config: `packages/agent/config/sources.json`.
 trzy źródła mają `"type": "atom"` — przy `"rss"` parser nie znajduje `rss.channel.item`
 i zwraca zero wpisów bez żadnego błędu.
 
-Reddit agresywnie limituje niezalogowany ruch per IP i potrafi zwrócić 429. Łagodzimy to
-dwojako: `sources/http.ts` ponawia (3 próby, backoff 1s/2s, honorując `Retry-After`),
-a `pipeline.ts` pobiera źródła z tego samego hosta sekwencyjnie zamiast równolegle.
-Mimo to pojedynczy feed potrafi się nie dociągnąć — to nie jest błąd pipeline'u, kolejny
-przebieg go nadrobi. W GitHub Actions ryzyko jest wyższe niż lokalnie, bo Reddit ostrzej
-traktuje adresy z datacenter; gdyby te źródła zaczęły padać stale, rozwiązaniem jest
-własna aplikacja OAuth Reddita.
+**Uwaga o limitach Reddita:** niezalogowany ruch jest limitowany do mniej więcej jednego
+żądania na minutę per IP. Przez pewien czas dwa z trzech feedów Reddita kończyły każdy
+przebieg na 429, a ponawianie z backoffem 1s/2s nie miało prawa pomóc — sekundy przeciwko
+oknu minutowemu. Zmierzone sondą co 15 s: 200 o +15 s, 429 o +31 s i +46 s, 200 o +62 s.
+
+Rozstrzygające okazało się to, że `x-ratelimit-remaining: 0` i `x-ratelimit-reset`
+przychodzą także na **udanej** odpowiedzi — host sam mówi, ile czekać, zanim cokolwiek się
+zepsuje. Dlatego `sources/http.ts` **wyprzedza** limit: po odpowiedzi z wyczerpanym
+budżetem zapisuje w mapie `nextSlot` moment, przed którym nie wolno ruszyć do tego hosta,
+i kolejne żądanie czeka do tej chwili. Mapa jest na poziomie modułu, żeby to, czego
+nauczył się pierwszy feed Reddita, chroniło dwa następne w tym samym przebiegu.
+Budżet czekania na źródło to 90 s; przekroczenie kończy się błędem tego jednego źródła,
+bo jeden feed nie może zatrzymać całego przebiegu.
+
+Koszt: ok. 80 s dłuższy przebieg raz na dwa dni, płacony wyłącznie przez grupę Reddita —
+hosty idą równolegle. Gdyby te źródła zaczęły padać mimo tego, rozwiązaniem jest własna
+aplikacja OAuth Reddita.
 
 ## 5a. Aliasy i Tailwind — konwencja
 
@@ -237,16 +270,27 @@ Kolory poza appką:
 Uwaga przy testach na `localhost`: `localStorage` jest wspólny dla całego originu, więc
 klucz `theme` bywa zapisany przez inny lokalny projekt korzystający z `next-themes`.
 
-## 5c. Skrzynka odbiorcza — stan w URL i podział po dacie
+## 5c. Skrzynka odbiorcza — stan w adresie, sekcje i strony
 
-Zakładka (`?view=new|starred|read|all`) i filtr kategorii (`?topic=`) żyją
+Zakładka (`?view=new|starred|read|all`), filtr kategorii (`?topic=`), fraza (`?q=`),
+źródło (`?source=`), strona (`?page=`) i kolejność (`?sort=recency|relevance`) żyją
 w **URL-u**, nie w stanie komponentu. Dzięki temu działa przycisk wstecz, odświeżenie nie
 gubi kontekstu i widok da się wysłać sobie na drugie urządzenie. Wartości domyślne są
-pomijane, więc adres bez parametrów to po prostu `/`.
+pomijane, więc adres bez parametrów to po prostu `/`. Wyjątkiem jest próg trafności
+(sekcja 5d): należy do czytającego, nie do linku, który mógłby wysłać dalej — dlatego
+siedzi w ciasteczku, a nie w adresie.
 
 Nawigacja to zwykłe `<Link>`, a **nie** shadcn `tabs`: Radix przełącza panele po stronie
 klienta, a u nas każda zakładka to inne zapytanie do bazy. Kontrolowanie go URL-em
 oznaczałoby dwa źródła prawdy walczące o to samo.
+
+Sekcje listy idą za kolejnością. Przy sortowaniu po dacie to „Dziś / Wczoraj /
+W tym tygodniu / Starsze", przy sortowaniu po trafności — „Trafność 5 / 4 / 3"
+(`groupByRelevance` w `lib/relevance.ts`). Nagłówki dat nad rankingiem rozsypałyby
+dokładnie ten porządek, który ranking ma pokazać: lipcowa piątka lądowałaby w „Starsze",
+pod trzema dniami czwórek. Sortowanie po trafności powstało właśnie dlatego, że Claude
+stawia 5 rzadko — przy kolejności po dacie pierwsza piątka potrafi siedzieć na czwartej
+stronie.
 
 Podział na „Dziś / Wczoraj / W tym tygodniu / Starsze" liczy `lib/date-groups.ts`.
 **Strefa jest przypięta do `Europe/Warsaw`, a nie brana ze środowiska** — komponent
@@ -269,6 +313,72 @@ pokazywałoby pustkę.
 Interakcje w `inbox.tsx` są optymistyczne z wycofaniem: karta znika od razu, a przy
 błędzie zapisu wraca razem z komunikatem. Cicha porażka jest tu groźniejsza niż widoczna —
 raz już wyglądała jak sukces, gdy `ids` z BIGINT-ów nie przechodziło walidacji.
+
+## 5d. Próg trafności — jeden wybór, dwa magazyny
+
+Agent ocenia **każdy** wpis w skali 1-5 i zapisuje wszystkie; próg decyduje, ile z tego
+dociera do czytelnika. Przez pewien czas odpowiedzi były dwie i nikt ich ze sobą nie
+uzgadniał: powiadomienia filtrowała kolumna `push_subscriptions.min_relevance`, a lista
+własna, zaszyta na sztywno stała `MIN_RELEVANCE = 3` w `lib/items.ts`. Ustawiona
+„Trafność 4+" wyciszała telefon i nie ruszała skrzynki, a karta ustawień wprost pisała,
+że progu nie dotyczy.
+
+Teraz wybór jest jeden, a magazyny są dwa, bo czytają go dwa różne światy:
+
+- **ciasteczko `min-relevance`** (rok, `samesite=lax`) — filtruje skrzynkę. Odczytuje je
+  na serwerze `lib/preferences.ts`, wynik jedzie argumentem do każdej funkcji w
+  `lib/items.ts`, więc lista, liczniki zakładek i licznik na ikonie PWA nie mogą opisywać
+  trzech różnych skrzynek.
+- **kolumna `push_subscriptions.min_relevance`** — filtruje digest, bo agent chodzi
+  w GitHub Actions i przeglądarki nigdy nie widzi.
+
+Jedno „Zapisz" na `/settings` pisze w oba miejsca. Przy wczytaniu karty wygrywa baza
+i **nadpisuje** ciasteczko — to naprawia urządzenie, które wybrało próg, zanim skrzynka
+zaczęła go respektować.
+
+Dlaczego ciasteczko, a nie `localStorage`: strona renderuje się na serwerze, więc próg musi
+przyjechać **razem z żądaniem**. Odczytany po hydratacji dawałby widoczny przeskok listy
+z jednego progu na drugi. Dlaczego nie kolumna po urządzeniu: laptop bez powiadomień nie ma
+żadnego wiersza subskrypcji, a próg ma tam działać tak samo.
+
+Konsekwencja podziału modułów: `lib/relevance.ts` (poziomy, parsowanie, zapis ciasteczka,
+sekcje po trafności) jest wolne od `next/headers`, bo importuje je komponent kliencki —
+cokolwiek trafia do bundla klienta, nie może dotykać requestu. Odczyt requestu mieszka
+osobno w `lib/preferences.ts`. Z tego samego powodu `lib/items.ts` dostaje próg
+argumentem, zamiast czytać go sobie samo.
+
+Poziomy to 2-5. Jedynka jest celowo nieosiągalna: agent daje ją wpisom nie na temat,
+a lista bez żadnej podłogi to surowy feed, przed którym appka ma bronić. Domyślna wartość
+bez ciasteczka to 4 — tyle samo, co DEFAULT kolumny z migracji 002 i `RELEVANCE_THRESHOLD`
+agenta. Próg działa jednakowo we wszystkich zakładkach, więc oznaczona gwiazdką „trójka"
+znika z „Ulubionych" po podniesieniu progu do 4 i wraca po obniżeniu. Wyjątek dla gwiazdki
+rozjechałby liczniki nad listą, bo te liczą się jednym zapytaniem.
+
+## 5e. Wyciszanie źródeł, wyszukiwanie, odświeżanie
+
+**Wyciszanie** (`/sources`, migracja 008, ADR-0004) działa na dwóch poziomach naraz:
+agent w ogóle nie pobiera wyciszonego źródła, a appka ukrywa wszystko, co z niego przyszło
+— razem z licznikami zakładek i licznikiem na ikonie. Jest **globalne**, w odróżnieniu od
+progu i kategorii: te są ustawieniami powiadomień dla urządzenia, a skrzynka jest jedną
+wspólną listą. Nic nie jest kasowane, więc odciszenie przywraca zebrane wcześniej wpisy;
+nie wraca sam okres ciszy, bo agent wtedy nie pobierał, a feed RSS niesie tylko ostatnie
+pozycje.
+
+**Wyszukiwanie** to zwykłe `ILIKE` po tytule i polskim streszczeniu, świadomie bez
+`tsvector`: pełnotekstowe wyszukiwanie Postgresa potrzebuje konfiguracji `polish`,
+a ta wymaga słowników ispell po stronie serwera, których Neon nie daje. Fallback `simple`
+nie robi stemmingu, więc „Reacta" nie znalazłoby „React" — a dopasowanie po podciągu tak.
+Przy kilkuset wierszach indeks i tak nie kupiłby nic ponad skan sekwencyjny. Fraza
+**zawęża aktywną zakładkę**, a nie z niej ucieka; liczniki zakładek liczą się z frazą, więc
+same pokazują, gdzie są trafienia. Znane ograniczenia: brak `unaccent` (polskie znaki
+diakrytyczne) i brak dopasowania do granicy słowa dla tokenów krótszych niż trzy znaki.
+
+**Odświeżanie** (`inbox-refresh.tsx` + `GET /api/items/updates`) odpowiada na pytanie
+„czy coś przyszło, odkąd to otworzyłem". Punktem odniesienia jest `latestItemId` z renderu:
+`items.id` to rosnący BIGINT, więc jedna liczba opisuje wszystko, co przeglądarka już
+widziała — bez dodatkowej kolumny i bez porównywania zegarów między bazą a telefonem,
+który może się spieszyć. Odpowiedź celowo ignoruje aktywne filtry: pytanie brzmi „czy agent
+coś przywiózł", a nie „czy przywiózł coś pasującego do tego, co mam teraz na ekranie".
 
 ## 6. Powiadomienia push (PWA + Web Push)
 
@@ -324,7 +434,9 @@ Migracja 002 dołożyła `items.topics` (kategorie od Claude, indeks GIN) oraz
 `push_subscriptions.min_relevance` i `push_subscriptions.topics`. **Próg i kategorie są
 per subskrypcja, nie w ENV agenta** — dzięki temu zmieniają się z poziomu appki, bez
 redeployu, a dwa urządzenia mogą mieć różne ustawienia. Decyzję o wysyłce podejmuje
-`push.ts`, nie `pipeline.ts`. `topics = NULL` oznacza wszystkie kategorie.
+`push.ts`, nie `pipeline.ts`. `topics = NULL` oznacza wszystkie kategorie. Od czasu, gdy
+próg rządzi także skrzynką (sekcja 5d), `min_relevance` nie jest już jedynym magazynem
+progu — jest nim dla powiadomień, a ciasteczko dla listy.
 
 Wartości kategorii są po angielsku (`typescript`, `react`, `javascript`,
 `fullstack`, `ai`, `other`) — jadą przez URL, schemat wyjścia Claude i ustawienia
@@ -353,6 +465,13 @@ po twardym DELETE wpis wróciłby przy najbliższym przebiegu razem z powiadomie
 Konsekwencja: **każde** zapytanie o wpisy filtruje `deleted_at IS NULL` — dlatego cała
 selekcja i wszystkie zapisy siedzą w `apps/web/lib/items.ts`, a route handlery nie piszą
 własnego SQL-a.
+
+Migracja 008 dołożyła `sources.muted_at` — wyciszanie źródła (ADR-0004). Znacznik czasu,
+nie flaga BOOLEAN, spójnie z `read_at`, `deleted_at` i `starred_at`: zapisuje, **kiedy**
+źródło zamilkło. Kolumna siedzi na `sources`, a nie na `push_subscriptions`, gdzie mieszka
+próg i kategorie — tamte są ustawieniami powiadomień dla urządzenia, a wyciszenie dotyczy
+wspólnej listy. Bez indeksu: `sources` ma kilkanaście wierszy i każde zapytanie i tak
+czyta całość.
 
 Indeksy: `(relevance_score DESC, published_at DESC)` pod listę w UI, częściowy
 `(created_at DESC) WHERE notified_at IS NULL` pod "co jeszcze nie poszło pushem",

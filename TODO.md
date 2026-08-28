@@ -552,3 +552,30 @@ Agent aktualizuje ten plik na bieżąco, ale nigdy go nie commituje bez zgody
       - Rootowy skrypt mimo to doprecyzowany na `pnpm --recursive --if-present
         run lint`: jawne `run` nie może wpaść w ścieżkę `exec`, a `--if-present`
         pomija pakiet bez tego skryptu, gdyby doszedł kolejny.
+- [x] `docs/ARCHITECTURE.md` zsynchronizowane z kodem.
+      - Dokument został z Fazy 8-9 i w kilku miejscach opisywał appkę, której
+        już nie ma: drzewo katalogów bez `/settings`, `/sources`, tras
+        `items/updates` i `sources/mute`, bez siedmiu plików z `lib/`,
+        bez migracji 008 i bez ADR-0004.
+      - Zaktualizowane drzewo katalogów (razem z README) i lista migracji.
+      - Sekcja 4: `pipeline.ts` pomija wyciszone źródła i grupuje po hoście;
+        dopisany `sources/http.ts` jako jedyne miejsce wiedzące o limitach hosta.
+      - Sekcja 5: akapit o Reddicie opisywał nieistniejące już ponawianie
+        (3 próby, backoff 1s/2s, `Retry-After`). Zastąpiony opisem tego, co
+        naprawdę robi kod — pauza brana przed żądaniem z nagłówków
+        `x-ratelimit-*`, mapa `nextSlot` na poziomie modułu, budżet 90 s —
+        razem z pomiarem sondy i kosztem ok. 80 s na przebieg.
+      - Sekcja 5c: stan w adresie to teraz sześć parametrów (`view`, `topic`,
+        `q`, `source`, `page`, `sort`), a sekcje listy idą za kolejnością —
+        daty przy sortowaniu po dacie, „Trafność 5 / 4 / 3" przy trafności.
+      - Nowa sekcja 5d: próg trafności, jeden wybór i dwa magazyny, z powodem
+        podziału `lib/relevance.ts` / `lib/preferences.ts` (`next/headers`
+        nie może trafić do bundla klienta).
+      - Nowa sekcja 5e: wyciszanie źródeł, wyszukiwanie (dlaczego `ILIKE`,
+        a nie `tsvector` na Neonie) i odświeżanie po `latestItemId`.
+      - Sekcja 7: dopisana migracja 008 i zdanie o tym, że `min_relevance`
+        nie jest już jedynym magazynem progu.
+      - Każde nowe zdanie sprawdzone w kodzie, nie odtworzone z pamięci:
+        grupowanie po hoście w `pipeline.ts`, treść migracji 008, komplet
+        tras API i plików `lib/`, 11 źródeł w `sources.json` (5 rss, 5 atom,
+        1 scrape) wraz z URL-ami zgodnymi z tabelą w sekcji 5.
