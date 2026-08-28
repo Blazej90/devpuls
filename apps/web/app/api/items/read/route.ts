@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { countUnread, markAllRead, markRead, markUnread, TOPICS } from "@/lib/items";
+import { readMinRelevance } from "@/lib/preferences";
 
 export const dynamic = "force-dynamic";
 
@@ -33,8 +34,12 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid request" }, { status: 400 });
   }
 
+  // "Mark all" must not reach past the visible list, and the badge has to be
+  // counted with the same floor the list was rendered with.
+  const minRelevance = await readMinRelevance();
+
   try {
-    if ("all" in parsed.data) await markAllRead(parsed.data.topic ?? null);
+    if ("all" in parsed.data) await markAllRead(parsed.data.topic ?? null, minRelevance);
     else if (parsed.data.unmark) await markUnread(parsed.data.ids);
     else await markRead(parsed.data.ids);
   } catch (error: unknown) {
@@ -42,5 +47,5 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Write failed" }, { status: 500 });
   }
 
-  return NextResponse.json({ ok: true, unread: await countUnread() });
+  return NextResponse.json({ ok: true, unread: await countUnread(minRelevance) });
 }

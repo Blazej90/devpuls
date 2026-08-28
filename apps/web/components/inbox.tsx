@@ -27,6 +27,7 @@ import { Highlight } from "@/components/highlight";
 import { setBadge } from "@/lib/badge";
 import { cn } from "@/lib/utils";
 import { formatDate, groupByDate } from "@/lib/date-groups";
+import { groupByRelevance } from "@/lib/relevance";
 import { hrefFor } from "@/components/inbox-filters";
 import {
   TOPIC_LABELS,
@@ -267,7 +268,7 @@ export function Inbox({
   /** Calendar day decided by the server — see `lib/date-groups.ts`. */
   today: string;
 }) {
-  const { view, query } = filter;
+  const { view, query, sort } = filter;
   const router = useRouter();
   const [deleted, setDeleted] = useState<Set<number>>(new Set());
   // Optimistic overrides: a `Map` rather than a `Set`, because both states are
@@ -305,7 +306,13 @@ export function Inbox({
     [items, deleted, readOverrides, starOverrides, view],
   );
 
-  const groups = useMemo(() => groupByDate(visible, today), [visible, today]);
+  // Sections follow the order: by day when the list is a feed, by score when
+  // it is a ranking. Date headers over a relevance sort would scatter the very
+  // order they are meant to show.
+  const groups = useMemo(
+    () => (sort === "relevance" ? groupByRelevance(visible) : groupByDate(visible, today)),
+    [visible, today, sort],
+  );
   const selectedVisible = visible.filter((item) => selected.has(item.id));
 
   const toggleSelection = (id: number, checked: boolean) => {

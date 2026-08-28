@@ -1,5 +1,4 @@
 import { sql } from "@/lib/db";
-import { MIN_RELEVANCE } from "@/lib/items";
 
 /**
  * The sources themselves — the list, and the mute (migration 008).
@@ -58,7 +57,7 @@ export async function listSources(): Promise<Source[]> {
  * A LEFT JOIN, so a source that has not delivered anything yet is still on the
  * list — otherwise it could never be muted in advance.
  */
-export async function listSourceStats(): Promise<SourceStat[]> {
+export async function listSourceStats(minRelevance: number): Promise<SourceStat[]> {
   const rows = (await sql()`
     SELECT s.id,
            s.name,
@@ -69,7 +68,7 @@ export async function listSourceStats(): Promise<SourceStat[]> {
       LEFT JOIN items i
         ON i.source_id = s.id
        AND i.deleted_at IS NULL
-       AND i.relevance_score >= ${MIN_RELEVANCE}
+       AND i.relevance_score >= ${minRelevance}
      GROUP BY s.id, s.name, s.muted_at
      ORDER BY items DESC, s.name
   `) as {

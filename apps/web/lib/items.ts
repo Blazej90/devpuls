@@ -9,9 +9,6 @@ import { sql } from "@/lib/db";
  * from the functions below instead.
  */
 
-/** Items below this relevance never reach the inbox at all. */
-export const MIN_RELEVANCE = 3;
-
 // Tab order. "Starred" sits right after "New" because it is the second
 // "this matters to me" bucket — the archive and the full list are needed less.
 export const VIEWS = ["new", "starred", "read", "all"] as const;
@@ -38,6 +35,19 @@ export const TOPIC_LABELS: Record<Topic, string> = {
   other: "Inne",
 };
 
+/**
+ * List order. The inbox is a feed first, so `recency` stays the default; the
+ * relevance order exists because the agent hands out a 5 a few times a year and
+ * by date those land pages deep, under a hundred fresher threes and fours.
+ */
+export const SORTS = ["recency", "relevance"] as const;
+export type Sort = (typeof SORTS)[number];
+
+export const SORT_LABELS: Record<Sort, string> = {
+  recency: "Najnowsze",
+  relevance: "Najtrafniejsze",
+};
+
 export const VIEW_LABELS: Record<View, string> = {
   new: "Nowe",
   starred: "Ulubione",
@@ -53,11 +63,17 @@ export interface Filter {
   query: string | null;
   /** `sources.id` the inbox is narrowed to; `null` = every source. */
   source: string | null;
+  /** What the list is ordered by. */
+  sort: Sort;
 }
 
 /** Tab and filter live in the URL (ADR-0003), so they must survive any input. */
 export function parseView(raw: string | string[] | undefined): View {
   return VIEWS.find((view) => view === raw) ?? "new";
+}
+
+export function parseSort(raw: string | string[] | undefined): Sort {
+  return SORTS.find((sort) => sort === raw) ?? "recency";
 }
 
 export function parseTopic(raw: string | string[] | undefined): Topic | null {
@@ -186,6 +202,17 @@ function toItem(row: ItemRow): NewsItem {
 const RECENCY = "COALESCE(i.published_at, i.created_at)";
 
 /**
+ * The two orders, as SQL. Relevance sorts `NULLS LAST` so an unscored item
+ * cannot open the list, and falls back to the date within one score — without a
+ * second key the order among fifty equal fours would be whatever the planner
+ * felt like, and an OFFSET page boundary would shift between two requests.
+ */
+const ORDER: Record<Sort, string> = {
+  recency: `${RECENCY} DESC`,
+  relevance: `i.relevance_score DESC NULLS LAST, ${RECENCY} DESC`,
+};
+
+/**
  * Items from a muted source never show up anywhere in the app (migration 008).
  * Written once and reused by every query — the tab counters and the PWA badge
  * have to agree with the list, or the badge would promise items that cannot be
@@ -198,9 +225,16 @@ const MUTED_EXCLUDED =
  * Conditions shared by every view, as parameterised SQL.
  * The returned `where` is interpolated into the query — but it is built purely
  * from our own literals, while every user-supplied value goes through `params`.
+ *
+ * `minRelevance` is the device's own floor (`lib/relevance.ts`) and arrives as
+ * an argument rather than being read here: this module is imported by client
+ * components for its labels and types, so it may not touch the request.
  */
-function buildConditions(filter: Filter): { where: string; params: unknown[] } {
-  const params: unknown[] = [MIN_RELEVANCE];
+function buildConditions(
+  filter: Filter,
+  minRelevance: number,
+): { where: string; params: unknown[] } {
+  const params: unknown[] = [minRelevance];
   const parts = [
     "i.deleted_at IS NULL",
     "i.relevance_score >= $1",
@@ -284,8 +318,12 @@ export interface Page {
  * that but would remove the ability to jump to a specific page — which is the
  * whole point of pagination.
  */
-export async function listItems(filter: Filter, page = 1): Promise<Page> {
-  const { where, params } = buildConditions(filter);
+export async function listItems(
+  filter: Filter,
+  minRelevance: number,
+  page = 1,
+): Promise<Page> {
+  const { where, params } = buildConditions(filter, minRelevance);
 
   // One row beyond the page: a cheap and exact "is there more", independent of
   // a count from a separate query.
@@ -302,7 +340,7 @@ export async function listItems(filter: Filter, page = 1): Promise<Page> {
      FROM items i
      JOIN sources s ON s.id = i.source_id
      WHERE ${where}
-     ORDER BY ${RECENCY} DESC
+     ORDER BY ${ORDER[filter.sort]}
      LIMIT $${limitParam} OFFSET $${params.length}`,
     params,
   )) as ItemRow[];
@@ -320,9 +358,12 @@ export async function listItems(filter: Filter, page = 1): Promise<Page> {
  * where the hits are ("Nowe 0 · Ulubione 1 · Przeczytane 3"), so nothing has to
  * switch tabs on the user's behalf.
  */
-export async function counts(filter: Omit<Filter, "view">): Promise<Record<View, number>> {
+export async function counts(
+  filter: Omit<Filter, "view">,
+  minRelevance: number,
+): Promise<Record<View, number>> {
   // `view` last, so a filter that still carries one cannot override it.
-  const { where, params } = buildConditions({ ...filter, view: "all" });
+  const { where, params } = buildConditions({ ...filter, view: "all" }, minRelevance);
 
   const rows = (await sql().query(
     `SELECT
@@ -342,12 +383,12 @@ export async function counts(filter: Omit<Filter, "view">): Promise<Record<View,
  * Unread count without any category filter — this is what ends up on the PWA
  * icon badge, so it has to describe the whole inbox, not the current view.
  */
-export async function countUnread(): Promise<number> {
+export async function countUnread(minRelevance: number): Promise<number> {
   const rows = (await sql()`
     SELECT COUNT(*)::int AS n FROM items
     WHERE read_at IS NULL
       AND deleted_at IS NULL
-      AND relevance_score >= ${MIN_RELEVANCE}
+      AND relevance_score >= ${minRelevance}
       AND source_id NOT IN (SELECT id FROM sources WHERE muted_at IS NOT NULL)
   `) as { n: number }[];
 
@@ -366,11 +407,11 @@ export async function countUnread(): Promise<number> {
  * threshold, deleted, or from a muted source is not "new" — it is invisible,
  * and counting it would promise something the list will never show.
  */
-export async function latestItemId(): Promise<number> {
+export async function latestItemId(minRelevance: number): Promise<number> {
   const rows = (await sql()`
     SELECT COALESCE(MAX(id), 0)::text AS id FROM items
     WHERE deleted_at IS NULL
-      AND relevance_score >= ${MIN_RELEVANCE}
+      AND relevance_score >= ${minRelevance}
       AND source_id NOT IN (SELECT id FROM sources WHERE muted_at IS NOT NULL)
   `) as { id: string }[];
 
@@ -385,12 +426,15 @@ export async function latestItemId(): Promise<number> {
  * anything matching my current filters". The toast offers a way to the full
  * list precisely because the answer can lie outside what is on screen.
  */
-export async function countNewerThan(since: number): Promise<number> {
+export async function countNewerThan(
+  since: number,
+  minRelevance: number,
+): Promise<number> {
   const rows = (await sql()`
     SELECT COUNT(*)::int AS n FROM items
     WHERE id > ${String(since)}
       AND deleted_at IS NULL
-      AND relevance_score >= ${MIN_RELEVANCE}
+      AND relevance_score >= ${minRelevance}
       AND source_id NOT IN (SELECT id FROM sources WHERE muted_at IS NOT NULL)
   `) as { n: number }[];
 
@@ -427,7 +471,10 @@ export async function markRead(ids: number[]): Promise<void> {
  * shown on a filtered view would also clear items the user cannot see at that
  * moment.
  */
-export async function markAllRead(topic: Topic | null): Promise<void> {
+export async function markAllRead(
+  topic: Topic | null,
+  minRelevance: number,
+): Promise<void> {
   // Muted sources are excluded here too: "mark all" must not reach items the
   // user cannot see, or unmuting would hand back a source already emptied.
   if (topic === null) {
@@ -435,7 +482,7 @@ export async function markAllRead(topic: Topic | null): Promise<void> {
       UPDATE items SET read_at = NOW()
       WHERE read_at IS NULL
         AND deleted_at IS NULL
-        AND relevance_score >= ${MIN_RELEVANCE}
+        AND relevance_score >= ${minRelevance}
         AND source_id NOT IN (SELECT id FROM sources WHERE muted_at IS NOT NULL)
     `;
     return;
@@ -445,7 +492,7 @@ export async function markAllRead(topic: Topic | null): Promise<void> {
     UPDATE items SET read_at = NOW()
     WHERE read_at IS NULL
       AND deleted_at IS NULL
-      AND relevance_score >= ${MIN_RELEVANCE}
+      AND relevance_score >= ${minRelevance}
       AND topics && ${[topic]}::text[]
       AND source_id NOT IN (SELECT id FROM sources WHERE muted_at IS NOT NULL)
   `;

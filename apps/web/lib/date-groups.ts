@@ -56,8 +56,13 @@ export function toBucket(recency: string, today: string): Bucket {
   return "older";
 }
 
+/**
+ * A section of the list. `bucket` is a plain string rather than `Bucket`,
+ * because the relevance order sections by score instead of by day —
+ * `groupByRelevance` in `lib/relevance.ts` returns the same shape.
+ */
 export interface Group<T> {
-  bucket: Bucket;
+  bucket: string;
   label: string;
   items: T[];
 }

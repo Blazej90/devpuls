@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { countUnread, setStarred } from "@/lib/items";
+import { readMinRelevance } from "@/lib/preferences";
 
 export const dynamic = "force-dynamic";
 
@@ -32,5 +33,8 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Write failed" }, { status: 500 });
   }
 
-  return NextResponse.json({ ok: true, unread: await countUnread() });
+  return NextResponse.json({
+    ok: true,
+    unread: await countUnread(await readMinRelevance()),
+  });
 }

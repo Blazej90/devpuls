@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { countNewerThan, countUnread } from "@/lib/items";
+import { readMinRelevance } from "@/lib/preferences";
 
 export const dynamic = "force-dynamic";
 
@@ -28,10 +29,12 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Invalid request" }, { status: 400 });
   }
 
+  const minRelevance = await readMinRelevance();
+
   try {
     const [added, unread] = await Promise.all([
-      countNewerThan(parsed.data.since),
-      countUnread(),
+      countNewerThan(parsed.data.since, minRelevance),
+      countUnread(minRelevance),
     ]);
 
     // `unread` comes back from every route in the app so the badge on the PWA
