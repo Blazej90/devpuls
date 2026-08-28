@@ -97,6 +97,52 @@ export default async function AboutPage() {
           </p>
         </div>
 
+        {/*
+          What the app stores, in place of a consent banner.
+
+          Nothing here needs consent: the relevance cookie does not exist until
+          the reader presses "Zapisz" themselves, and the theme is the same kind
+          of choice — storage strictly necessary for a service the user
+          explicitly asked for is exempt from the ePrivacy consent rule. A banner
+          would put a question with no answer in front of the news, and its
+          "Akceptuję" would imply there is something to accept.
+
+          This paragraph stops being true the moment anything third-party lands
+          in the app — analytics, an embed, a font served from someone else's
+          domain. Then consent is required, and required *before* the write.
+        */}
+        <h2 className="text-lg font-medium tracking-tight text-foreground">
+          Co appka zapamiętuje
+        </h2>
+
+        <div className="text-muted-foreground space-y-4 leading-relaxed">
+          <p>
+            Na tym urządzeniu zostają dwie rzeczy: ciasteczko z progiem trafności
+            — powstaje dopiero wtedy, gdy klikniesz „Zapisz” w ustawieniach,
+            i jest ważne rok — oraz wybrany motyw, trzymany w pamięci
+            przeglądarki. Jedno i drugie czyta wyłącznie ta aplikacja.
+          </p>
+          <p>
+            Po włączeniu powiadomień w bazie ląduje adres subskrypcji wystawiony
+            przez Twoją przeglądarkę, razem z progiem i kategoriami — bez tego
+            agent nie miałby dokąd wysłać powiadomienia. Zgody udzielasz
+            natywnym oknem przeglądarki, appka nie ma tu nic do dodania.
+          </p>
+          <p>
+            Nie ma tu analityki, reklam ani skryptów spoza tej domeny; nic nie
+            śledzi Cię między wizytami. Dlatego nie znajdziesz banera
+            o ciasteczkach — nie ma czego akceptować.
+          </p>
+          <p>
+            Żeby wszystko wyczyścić: wyłącz powiadomienia w{" "}
+            <Link href="/settings" className="text-foreground underline underline-offset-2">
+              ustawieniach
+            </Link>{" "}
+            (to kasuje subskrypcję po stronie serwera) i usuń dane witryny
+            w przeglądarce (to kasuje próg i motyw).
+          </p>
+        </div>
+
         <Separator />
 
         <div className="flex flex-wrap items-center justify-between gap-3">
