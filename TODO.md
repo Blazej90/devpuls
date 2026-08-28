@@ -504,3 +504,25 @@ Agent aktualizuje ten plik na bieżąco, ale nigdy go nie commituje bez zgody
         chipie i na aktywnej pigułce sortowania.
       - Niezweryfikowane wzrokowo: oba motywy na żywo — zmiana jest oparta
         na tokenach z `globals.css`, nie na dobranych ręcznie kolorach.
+- [x] Sekcja „Co appka zapamiętuje" na /about zamiast banera o ciasteczkach.
+      - Audyt tego, co faktycznie ląduje na urządzeniu: ciasteczko
+        `min-relevance` (rok, `samesite=lax`, powstaje dopiero po kliknięciu
+        „Zapisz"), motyw w `localStorage` przez `next-themes`, i tyle.
+        Subskrypcja push siedzi w bazie, nie na urządzeniu. Zero analityki,
+        zero skryptów spoza domeny — w `package.json` nie ma ani Vercel
+        Analytics, ani Speed Insights, ani niczego third-party.
+      - Dlatego bez banera: zgody wymaga zapis w urządzeniu **poza** tym, co
+        niezbędne do usługi wyraźnie zażądanej przez użytkownika (ePrivacy
+        art. 5(3), u nas Prawo komunikacji elektronicznej). Preferencja, która
+        nie istnieje, dopóki użytkownik sam jej nie zapisze, to podręcznikowy
+        przykład wyjątku. Baner postawiłby przed treścią pytanie bez
+        odpowiedzi, a jego „Akceptuję" sugerowałoby, że jest co akceptować.
+      - Notka mówi też, jak to skasować: wyłączenie powiadomień w ustawieniach
+        kasuje wiersz subskrypcji po stronie serwera (`DELETE` w
+        `api/push/subscribe`), a wyczyszczenie danych witryny — próg i motyw.
+      - Komentarz przy sekcji zapisuje warunek ważności: przestaje obowiązywać
+        w chwili, gdy w appce pojawi się cokolwiek third-party (analityka,
+        osadzenie, font z cudzej domeny). Wtedy zgoda jest wymagana i to
+        **przed** zapisem.
+      - Zweryfikowane: sekcja renderuje się na `/about` w całości, `tsc`,
+        `eslint` i `next build` czyste.
