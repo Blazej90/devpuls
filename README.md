@@ -3,7 +3,7 @@
 [![Ingest news](https://github.com/Blazej90/devpuls/actions/workflows/ingest.yml/badge.svg)](https://github.com/Blazej90/devpuls/actions/workflows/ingest.yml)
 
 Czytnik nowinek technicznych, który zamiast kolejnego feeda daje **skrzynkę odbiorczą**:
-agent obchodzi 11 źródeł, ocenia każdy wpis pod kątem jednego konkretnego profilu
+agent obchodzi 24 źródła, ocenia każdy wpis pod kątem jednego konkretnego profilu
 (TypeScript / React / JavaScript / fullstack / AI), streszcza po polsku i wysyła
 **jedno zbiorcze powiadomienie** na przebieg — nie jedno na artykuł.
 
@@ -15,9 +15,10 @@ Na żywo: **[devpuls-ecru.vercel.app](https://devpuls-ecru.vercel.app/)** (PWA, 
 
 ```mermaid
 flowchart LR
-  A["config/sources.json<br/>11 źródeł"] --> B["GitHub Actions<br/>co 2 dni, 7:00 UTC"]
+  A["config/sources.json<br/>24 źródła"] --> B["GitHub Actions<br/>co 2 dni, 7:00 UTC"]
   B --> C["fetch: RSS / Atom / scrape"]
-  C --> D{"URL już znany?"}
+  C --> P["filtr tytułu + limit<br/>per źródło"]
+  P --> D{"URL już znany?"}
   D -- tak --> X["pomiń"]
   D -- nie --> E["Claude Haiku 4.5<br/>trafność 1-5 + streszczenie PL"]
   E --> F[("Neon Postgres")]
@@ -28,15 +29,19 @@ flowchart LR
 1. **Pobranie.** `packages/agent` czyta `config/sources.json` i ściąga każde źródło
    właściwym fetcherem (`rss`, `atom`, `scrape`). Wszystkie zwracają ten sam
    znormalizowany kształt, więc dalszy pipeline nie wie, skąd wpis przyszedł.
-2. **Deduplikacja.** `items.url` ma `UNIQUE` — to on realizuje „już to widzieliśmy",
+2. **Selekcja u źródła.** Zanim cokolwiek zacznie kosztować: `titlePattern` odsiewa to,
+   co nie jest wpisem (canary, buildy `-dev`, tagi paczek monorepa), a limit per źródło
+   mówi, ile brać. Dopiero potem — deduplikacja i model. → [ADR-0005](docs/adr/0005-source-selection-at-the-source.md)
+3. **Deduplikacja.** `items.url` ma `UNIQUE` — to on realizuje „już to widzieliśmy",
    a nie porównywanie tytułów. Usuwanie wpisu jest z tego samego powodu **miękkie**:
    po twardym `DELETE` artykuł wróciłby przy najbliższym przebiegu, z powiadomieniem.
-3. **Ocena.** Jedno wywołanie Claude na nowy wpis: trafność 1-5, kategorie
-   i streszczenie po polsku w 2-3 zdaniach. Streszczenie nigdy nie zastępuje źródła —
-   każda karta ma link do oryginału.
-4. **Powiadomienie.** Jeden digest na przebieg, składany osobno dla każdej subskrypcji
+4. **Ocena.** Jedno wywołanie Claude na nowy wpis: trafność 1-5, kategorie
+   i streszczenie po polsku w 2-3 zdaniach. Model dostaje też typ źródła — inaczej
+   traktuje ogłoszenie producenta, inaczej czyjś post na forum. Streszczenie nigdy nie
+   zastępuje źródła — każda karta ma link do oryginału.
+5. **Powiadomienie.** Jeden digest na przebieg, składany osobno dla każdej subskrypcji
    z wpisów przechodzących **jej** próg i kategorie.
-5. **Skrzynka.** Zakładki Nowe / Ulubione / Przeczytane / Wszystkie, wyszukiwanie,
+6. **Skrzynka.** Zakładki Nowe / Ulubione / Przeczytane / Wszystkie, wyszukiwanie,
    filtr kategorii i źródła, sortowanie po dacie albo po trafności — wszystko w URL-u,
    więc działa przycisk wstecz i widok da się wysłać na drugie urządzenie.
 
@@ -56,6 +61,11 @@ flowchart LR
   Jedno „Zapisz" w ustawieniach pisze w oba miejsca.
 - **Wyciszanie źródeł jest globalne**, w odróżnieniu od progu i kategorii.
   → [ADR-0004](docs/adr/0004-source-muting.md)
+- **Selekcja dzieje się u źródła, nie po ocenie.** Config mówi, co z danego feeda w ogóle
+  jest wpisem (`titlePattern` — bo `releases.atom` to kanał tagów, nie wydań) i ile go
+  bierzemy; Reddit czytany jest z listy top tygodnia, a nie ze strumienia nowych postów.
+  Wszystko przed wywołaniem Claude, więc odrzucone nic nie kosztuje.
+  → [ADR-0005](docs/adr/0005-source-selection-at-the-source.md)
 - **Haiku 4.5 świadomie.** Klasyfikacja 1-5 plus trzy zdania streszczenia nie
   potrzebują mocniejszego modelu, a wychodzi ok. 5× taniej niż klasa Opus.
 
@@ -178,15 +188,19 @@ a na produkcji sekrety agenta i weba i tak mieszkają w dwóch różnych miejsca
 
 ## Źródła
 
-11 pozycji: 5 × RSS, 5 × Atom, 1 × scrape — Hacker News, trzy subreddity, wydania
-TypeScripta i Reacta na GitHubie, TypeScript Blog, OpenAI News, DeepMind, Hugging Face
-i Anthropic News. Pełna lista: [`packages/agent/config/sources.json`](packages/agent/config/sources.json).
+24 pozycje: 10 × RSS, 13 × Atom, 1 × scrape. Trzon to kanały oficjalne — wydania
+i blogi TypeScripta, Reacta, Node.js, Buna, Next.js, React Routera, Vite, Prismy,
+Drizzle'a, Neona, Vercela i Cloudflare, plus OpenAI, DeepMind, Hugging Face i Anthropic.
+Community to wyłącznie Hacker News i trzy subreddity. Pełna lista:
+[`packages/agent/config/sources.json`](packages/agent/config/sources.json).
 
 Dodanie źródła to wpis w tym pliku — agent synchronizuje tabelę `sources` przy każdym
 przebiegu. Preferuj RSS/Atom; źródło bez feeda dostaje `"type": "scrape"` i jest
 wyciągane przez Claude jako ustrukturyzowany JSON, zamiast pisania parsera HTML.
+Obowiązkowe `tier` (`official` albo `community`) — brak zatrzymuje start przebiegu,
+bo domyślna wartość czytałaby forum jak komunikat producenta.
 
-Dwie pułapki, na które ktoś już wdepnął:
+Cztery pułapki, na które ktoś już wdepnął:
 
 - Reddit pod `.rss` serwuje w rzeczywistości **Atom**, więc te źródła mają
   `"type": "atom"`. Przy `"rss"` parser cicho zwraca zero wpisów.
@@ -194,6 +208,12 @@ Dwie pułapki, na które ktoś już wdepnął:
   i mówi o tym nagłówkami `x-ratelimit-*` — także na **udanej** odpowiedzi.
   `sources/http.ts` czeka **przed** kolejnym żądaniem do tego hosta, zamiast
   ponawiać po odmowie.
+- Nagłówka, którego nie ma, nie wolno czytać przez `Number(...)` — `Number(null)`
+  to `0`, więc host milczący o limitach wygląda jak host z wyczerpanym budżetem.
+  Kosztowało to ślepą minutę przed każdym kolejnym feedem z tego samego hosta.
+- `releases.atom` na GitHubie to kanał **tagów**, nie wydań: canary, buildy `-dev`,
+  tagi paczek monorepa, tagi z cudzego CI. Źródła wydaniowe mają `titlePattern`
+  — listę dopuszczeń, nie wykluczeń.
 
 ## Monitoring
 

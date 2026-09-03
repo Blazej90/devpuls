@@ -1,7 +1,6 @@
 import { XMLParser } from "fast-xml-parser";
 
 import { fetchFeedText } from "@/sources/http.js";
-import { MAX_ITEMS_PER_SOURCE } from "@/config.js";
 import type { NormalizedItem, SourceConfig } from "@/types.js";
 
 const parser = new XMLParser({
@@ -54,7 +53,6 @@ export async function fetchAtom(source: SourceConfig): Promise<NormalizedItem[]>
   const entries = toArray(doc.feed?.entry);
 
   return entries
-    .slice(0, MAX_ITEMS_PER_SOURCE)
     .map((entry): NormalizedItem | null => {
       const url = pickHref(entry.link);
       const title = textOf(entry.title).trim();

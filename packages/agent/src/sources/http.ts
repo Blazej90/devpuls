@@ -52,9 +52,20 @@ function askedWait(response: Response): number | null {
   return null;
 }
 
-/** Whether the response says this host's budget is spent — 200 or 429 alike. */
+/**
+ * Whether the response says this host's budget is spent — 200 or 429 alike.
+ *
+ * The absent header is checked for separately, and it has to be: `Number(null)`
+ * is `0`, so reading it straight made every host that says nothing about rate
+ * limits look like a host with nothing left. That cost a blind minute before
+ * each second and further source on the same host — invisible while github.com
+ * carried two feeds, a wait of eight minutes per run once it carried nine.
+ */
 function exhausted(response: Response): boolean {
-  const remaining = Number(response.headers.get("x-ratelimit-remaining"));
+  const raw = response.headers.get("x-ratelimit-remaining");
+  if (raw === null) return false;
+
+  const remaining = Number(raw);
   return Number.isFinite(remaining) && remaining <= 0;
 }
 

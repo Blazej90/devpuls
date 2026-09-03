@@ -21,6 +21,7 @@ import { fetchSource } from "@/sources/index.js";
 import type {
   Assessment,
   AssessedItem,
+  FetchResult,
   NormalizedItem,
   SourceConfig,
 } from "@/types.js";
@@ -71,14 +72,14 @@ async function run(): Promise<void> {
   // One source going down must not take the others with it.
   const grouped = await Promise.all(
     [...byHost.values()].map(async (group) => {
-      const results: { source: SourceConfig; items: NormalizedItem[] | null }[] = [];
+      const results: { source: SourceConfig; result: FetchResult | null }[] = [];
       for (const source of group) {
         try {
-          results.push({ source, items: await fetchSource(source) });
+          results.push({ source, result: await fetchSource(source) });
         } catch (error: unknown) {
           console.error(`[${source.id}] fetch failed:`, error);
           noteError("source", source.id, error);
-          results.push({ source, items: null });
+          results.push({ source, result: null });
         }
       }
       return results;
@@ -87,13 +88,19 @@ async function run(): Promise<void> {
 
   const candidates: NormalizedItem[] = [];
 
-  for (const { source, items } of grouped.flat()) {
-    if (items === null) {
+  for (const { source, result } of grouped.flat()) {
+    if (result === null) {
       count("sourcesFailed");
       continue;
     }
 
-    console.log(`[${source.id}] fetched ${items.length} items`);
+    const { items, fetched } = result;
+    const dropped = fetched - items.length;
+
+    console.log(
+      `[${source.id}] fetched ${fetched} items, taken ${items.length}` +
+        (dropped > 0 ? ` (${dropped} filtered out or over the cap)` : ""),
+    );
     count("sourcesOk");
     candidates.push(...items);
 
@@ -101,7 +108,12 @@ async function run(): Promise<void> {
     // mode there is — that is how three Reddit feeds stayed silent for a week
     // before it turned out `.rss` serves Atom. A healthy source always has some
     // items.
-    if (items.length === 0) {
+    //
+    // The count checked here is the one from before `titlePattern`: a release
+    // feed carrying nothing but canaries keeps zero items and is working
+    // exactly as configured. Alarming on the kept count would turn this into
+    // noise on precisely the sources the filter exists for.
+    if (fetched === 0) {
       noteError("empty", source.id, "HTTP OK but zero items — check the parser");
     }
   }
@@ -118,12 +130,25 @@ async function run(): Promise<void> {
 
   const assessed: { id: number; item: AssessedItem }[] = [];
 
+  // The assessment needs the source, not just its id — a name that reads like
+  // something and the `official` / `community` tier. Items travel flat through
+  // the run, so the way back to the config is this lookup.
+  const sourceById = new Map(configured.map((source) => [source.id, source]));
+
   // Sequentially — a dozen or so items per run does not need parallelism, and
   // this way we stay clear of API rate limits.
   for (const item of fresh) {
+    const source = sourceById.get(item.sourceId);
+    if (!source) {
+      // Only reachable if a fetcher stamped an id that is not in the config.
+      console.error(`[claude] unknown source ${item.sourceId} for ${item.url}`);
+      noteError("claude", item.url, `unknown source ${item.sourceId}`);
+      continue;
+    }
+
     let assessment: Assessment | null;
     try {
-      assessment = await assessItem(item);
+      assessment = await assessItem(item, source);
     } catch (error: unknown) {
       console.error(`[claude] assessment failed: ${item.url}`, error);
       noteError("claude", item.url, error);
