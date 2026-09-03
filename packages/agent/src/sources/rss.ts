@@ -1,7 +1,6 @@
 import { XMLParser } from "fast-xml-parser";
 
 import { fetchFeedText } from "@/sources/http.js";
-import { MAX_ITEMS_PER_SOURCE } from "@/config.js";
 import type { NormalizedItem, SourceConfig } from "@/types.js";
 
 const parser = new XMLParser({
@@ -41,7 +40,6 @@ export async function fetchRss(source: SourceConfig): Promise<NormalizedItem[]> 
   const items = toArray(doc.rss?.channel?.item);
 
   return items
-    .slice(0, MAX_ITEMS_PER_SOURCE)
     .map((item): NormalizedItem | null => {
       const url = textOf(item.link).trim();
       const title = textOf(item.title).trim();

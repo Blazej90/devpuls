@@ -40,7 +40,8 @@ devpuls/
 │       ├── 0001-poc-architecture.md
 │       ├── 0002-digest-and-inbox.md
 │       ├── 0003-inbox-ux-rebuild.md
-│       └── 0004-source-muting.md
+│       ├── 0004-source-muting.md
+│       └── 0005-source-selection-at-the-source.md
 ├── apps/
 │   └── web/                       # Next.js PWA
 │       ├── package.json
@@ -156,16 +157,30 @@ devpuls/
   Ponawianie zostaje dla tego, czego nie da się przewidzieć: 5xx i 429 bez wyjaśnienia.
 - `src/claude.ts` — jedno wywołanie Claude API na artykuł: ocena trafności (1-5) względem
   profilu zainteresowań (TypeScript/React/JS/Fullstack/AI) + streszczenie PL (2-3 zdania) +
-  zachowany oryginalny link.
+  zachowany oryginalny link. Dostaje całe źródło, nie samo `sourceId`, bo dwa jego pola
+  niosą znaczenie, którego id nie ma: `name` (czytelna nazwa zamiast `reddit-reactjs`)
+  i `tier` — `official` albo `community`, czyli „ktoś to ogłosił" kontra „ktoś to
+  napisał". Prompt każe modelowi nie stawiać wpisom community więcej niż 2 bez
+  sprawdzalnej, nowej informacji, a stabilnemu wydaniu narzędzia ze stacku, ogłoszonemu
+  przez źródło `official` — nie mniej niż 4, choćby tytuł był samym numerem wersji
+  (ADR-0005).
 - `src/push.ts` — wysyłka Web Push do zapisanych subskrypcji (biblioteka `web-push`,
   klucze VAPID). Jedno zbiorcze powiadomienie na przebieg, złożone osobno dla każdej
   subskrypcji z wpisów przechodzących **jej** próg i kategorie.
 - `src/db.ts` — klient Postgres (Neon). Tabele: `sources`, `items`, `push_subscriptions`,
   `runs`.
-- `src/types.ts` — znormalizowany kształt wpisu (`NormalizedItem`) i wynik oceny
-  (`Assessment`), współdzielone przez wszystkie moduły.
+- `src/types.ts` — znormalizowany kształt wpisu (`NormalizedItem`), wynik oceny
+  (`Assessment`) i wynik pobrania źródła (`FetchResult`), współdzielone przez wszystkie
+  moduły. `FetchResult` niesie obok wpisów `fetched` — licznik sprzed filtra — i istnieje
+  wyłącznie po to, żeby alarm o pustym feedzie nie mylił źródła skonfigurowanego tak, by
+  czasem nie przepuścić niczego, ze źródłem, które faktycznie zamilkło.
 - `src/config.ts` — wczytanie `config/sources.json` + progi z ENV
-  (`RELEVANCE_THRESHOLD`, `MAX_ITEMS_PER_SOURCE`) i `requireEnv()`.
+  (`RELEVANCE_THRESHOLD`, `MAX_ITEMS_PER_SOURCE`) i `requireEnv()`. Waliduje przy okazji
+  dwie rzeczy w każdym źródle. `titlePattern` — bo zły regex nie zatrzymywałby przebiegu,
+  tylko po cichu nie przepuszczał niczego z tego źródła, czyli dokładnie ten tryb awarii,
+  za który projekt już raz zapłacił. Oraz `tier` — wymagany, nie domyślny: każdy domyślny
+  musiałby brzmieć `official` (pasuje do 20 z 24 źródeł) i właśnie to czyni go pułapką,
+  bo nowe źródło community bez tego pola byłoby czytane jako ogłoszenie producenta.
 - `src/anthropic.ts` — leniwie tworzony klient Claude i stała `MODEL` (domyślnie
   `claude-haiku-4-5`, nadpisywalna przez `CLAUDE_MODEL`), wspólne dla `claude.ts`
   i `sources/scrape.ts`. Haiku 4.5 wybrany świadomie: klasyfikacja 1-5 plus dwa-trzy
@@ -176,32 +191,79 @@ devpuls/
   wyliczenie statusu (`ok` / `degraded` / `failed`) oraz adnotacje i podsumowanie
   kroku w GitHub Actions. Stan trzymany na poziomie modułu, bo agent to skrypt
   jednorazowy — jeden proces to jeden przebieg (szczegóły w sekcji 9).
-- `src/sources/index.ts` — dispatch po polu `type` ze źródła na właściwy fetcher.
+- `src/sources/index.ts` — dispatch po polu `type` na właściwy fetcher **i** jedyne
+  miejsce, w którym stosowana jest polityka źródła z configu: najpierw `titlePattern`
+  (co w ogóle się liczy), dopiero potem limit `maxItems` / `MAX_ITEMS_PER_SOURCE` (ile
+  tego bierzemy). Kolejność jest tu sednem — fetchery oddają całą stronę feeda, filtr
+  działa na komplecie, limit na tym, co przeszło. Odwrotnie (a tak było, gdy każdy
+  fetcher ciął sam) można wziąć piętnaście canary Next.js i dopiero potem odkryć, że
+  żaden się nie kwalifikuje, a stabilny release stał na szesnastym miejscu.
 - Uruchamiany przez `tsx` jako pojedynczy skrypt Node.js z
   `.github/workflows/ingest.yml` — nie jako długo działający serwer.
 
 ## 5. Źródła danych (potwierdzone)
 
-| Źródło | Typ | URL |
-|---|---|---|
-| Hacker News | rss | `https://news.ycombinator.com/rss` |
-| Reddit r/typescript | atom | `https://www.reddit.com/r/typescript/.rss` |
-| Reddit r/reactjs | atom | `https://www.reddit.com/r/reactjs/.rss` |
-| Reddit r/LocalLLaMA | atom | `https://www.reddit.com/r/LocalLLaMA/.rss` |
-| TypeScript — GitHub Releases | atom | `https://github.com/microsoft/TypeScript/releases.atom` |
-| React — GitHub Releases | atom | `https://github.com/facebook/react/releases.atom` |
-| TypeScript Blog | rss | `https://devblogs.microsoft.com/typescript/feed/` |
-| OpenAI News | rss | `https://openai.com/news/rss.xml` |
-| Google DeepMind Blog | rss | `https://deepmind.google/blog/feed/basic/` |
-| Hugging Face Blog | rss | `https://huggingface.co/blog/feed.xml` |
-| Anthropic News | scrape | `https://www.anthropic.com/news` (brak oficjalnego RSS) |
+24 źródła, wyłącznie kanały oficjalne (release notes projektu albo blog firmowy) plus
+trzy subreddity i Hacker News jako jedyne wejścia community. Ten podział jest w configu
+polem `tier` i idzie dalej — aż do promptu oceniającego. Całość rozumowania: ADR-0005.
+
+| Źródło | Typ | URL | Polityka |
+|---|---|---|---|
+| Hacker News | rss | `https://news.ycombinator.com/rss` | — |
+| Reddit r/typescript | atom | `https://www.reddit.com/r/typescript/top/.rss?t=week` | `maxItems: 5` |
+| Reddit r/reactjs | atom | `https://www.reddit.com/r/reactjs/top/.rss?t=week` | `maxItems: 5` |
+| Reddit r/LocalLLaMA | atom | `https://www.reddit.com/r/LocalLLaMA/top/.rss?t=week` | `maxItems: 5` |
+| TypeScript — GitHub Releases | atom | `https://github.com/microsoft/TypeScript/releases.atom` | — |
+| React — GitHub Releases | atom | `https://github.com/facebook/react/releases.atom` | — |
+| TypeScript Blog | rss | `https://devblogs.microsoft.com/typescript/feed/` | — |
+| OpenAI News | rss | `https://openai.com/news/rss.xml` | — |
+| Google DeepMind Blog | rss | `https://deepmind.google/blog/feed/basic/` | — |
+| Hugging Face Blog | rss | `https://huggingface.co/blog/feed.xml` | — |
+| Anthropic News | scrape | `https://www.anthropic.com/news` (brak oficjalnego RSS) | — |
+| Node.js — GitHub Releases | atom | `https://github.com/nodejs/node/releases.atom` | `titlePattern` |
+| Node.js Blog | rss | `https://nodejs.org/en/feed/blog.xml` | — |
+| Bun — GitHub Releases | atom | `https://github.com/oven-sh/bun/releases.atom` | `titlePattern` |
+| Next.js — GitHub Releases | atom | `https://github.com/vercel/next.js/releases.atom` | `titlePattern` |
+| Next.js Blog | rss | `https://nextjs.org/feed.xml` | — |
+| React Router — GitHub Releases | atom | `https://github.com/remix-run/react-router/releases.atom` | `titlePattern` |
+| Vite — GitHub Releases | atom | `https://github.com/vitejs/vite/releases.atom` | `titlePattern` |
+| Prisma — GitHub Releases | atom | `https://github.com/prisma/prisma/releases.atom` | `titlePattern` |
+| Drizzle ORM — GitHub Releases | atom | `https://github.com/drizzle-team/drizzle-orm/releases.atom` | `titlePattern` |
+| Neon Blog | rss | `https://neon.com/blog/rss.xml` | — |
+| Neon Changelog | rss | `https://neon.com/docs/changelog/rss.xml` | — |
+| Vercel Blog | atom | `https://vercel.com/atom` | — |
+| Cloudflare Blog | rss | `https://blog.cloudflare.com/rss` | — |
 
 Pełny, maszynowo czytelny config: `packages/agent/config/sources.json`.
+
+**Uwaga o feedach z GitHub Releases:** `releases.atom` to nie jest kanał wydań — to kanał
+**tagów**, a projekty tagują znacznie więcej, niż wydają. Zmierzone na dziesięciu wpisach
+z każdego feeda: Next.js oddaje osiem canary na dwa stabilne wydania, Prisma niemal same
+`8.1.0-dev.6`, Vite miesza `v8.2.2` z tagami paczek monorepa (`create-vite@9.2.0`,
+`plugin-legacy@8.2.3`), Bun dokłada tagi z własnego CI (`consolidation-step-7-green`).
+Bez filtra każde z tych źródeł zalewałoby skrzynkę wpisami, których nikt nie ogłasza.
+
+Dlatego `titlePattern` w configu jest **listą dopuszczeń, nie wykluczeń** — taki kształt ma
+sam problem. „Jak wygląda wydanie" (`^v?[0-9]+[.][0-9]+[.][0-9]+$`, `^Bun v[0-9]`,
+`Version [0-9]+[.][0-9]+[.][0-9]+`) jest zbiorem skończonym; „jak wygląda wszystko, co
+wydaniem nie jest" — nie jest, i każda nowa konwencja nazewnicza upstreamu przeciekałaby
+przez blacklistę. Filtr działa przed wywołaniem Claude, więc odrzucone wpisy nic nie kosztują.
 
 **Uwaga o Reddicie:** endpoint `.rss` Reddita serwuje w rzeczywistości **Atom**
 (`<feed xmlns="http://www.w3.org/2005/Atom">`), mimo rozszerzenia w URL-u. Dlatego te
 trzy źródła mają `"type": "atom"` — przy `"rss"` parser nie znajduje `rss.channel.item`
 i zwraca zero wpisów bez żadnego błędu.
+
+**Uwaga o doborze wpisów z Reddita:** te trzy feedy idą po `/top/.rss?t=week`, a nie po
+strumieniu nowych postów, i mają `maxItems: 5`. Powód jest prosty: reszta źródeł to kanały,
+w których ktoś świadomie coś ogłasza, a subreddit to strumień, w którym większość wpisów to
+pytania początkujących i autopromocja. Głosowanie społeczności jest gotową selekcją wstępną
+i nic nie kosztuje — bierzemy ją zamiast płacić Claude za odsiewanie długiego ogona.
+Zmierzone: 16-25 wpisów w feedzie, 5 branych.
+
+`t=week` zamiast `t=day`, bo cron chodzi co dwa dni — przy `t=day` połowa okna wypadałaby
+poza zasięg. Nakładanie się kolejnych przebiegów nic nie kosztuje: powtórki odpada
+deduplikacja po URL, zanim dojdzie do wywołania modelu.
 
 **Uwaga o limitach Reddita:** niezalogowany ruch jest limitowany do mniej więcej jednego
 żądania na minutę per IP. Przez pewien czas dwa z trzech feedów Reddita kończyły każdy
@@ -220,6 +282,14 @@ bo jeden feed nie może zatrzymać całego przebiegu.
 Koszt: ok. 80 s dłuższy przebieg raz na dwa dni, płacony wyłącznie przez grupę Reddita —
 hosty idą równolegle. Gdyby te źródła zaczęły padać mimo tego, rozwiązaniem jest własna
 aplikacja OAuth Reddita.
+
+**I pułapka, którą to samo miejsce zastawiło przy rozbudowie źródeł:** `exhausted()`
+czytało `x-ratelimit-remaining` przez `Number(...)`, a `Number(null)` to `0`. Host, który
+o limitach nie mówi nic, wyglądał więc jak host z wyczerpanym budżetem — i każde drugie
+i kolejne źródło na tym samym hoście czekało ślepą minutę. Przy dwóch feedach z github.com
+było to niewidoczne, przy dziewięciu daje osiem minut czekania na przebieg. Brak nagłówka
+jest teraz sprawdzany osobno, przed konwersją. To ten sam błąd, co opisany wyżej przy
+`Retry-After` — warto go pamiętać jako klasę, nie jako jednorazową wpadkę.
 
 ## 5a. Aliasy i Tailwind — konwencja
 

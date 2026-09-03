@@ -2,7 +2,6 @@ import { z } from "zod";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 
 import { getAnthropic, MODEL } from "@/anthropic.js";
-import { MAX_ITEMS_PER_SOURCE } from "@/config.js";
 import { noteError } from "@/monitor.js";
 import type { NormalizedItem, SourceConfig } from "@/types.js";
 
@@ -83,7 +82,7 @@ export async function fetchScrape(
 
   const entries = parsed.parsed_output?.entries ?? [];
 
-  return entries.slice(0, MAX_ITEMS_PER_SOURCE).map((entry) => ({
+  return entries.map((entry) => ({
     sourceId: source.id,
     url: entry.url,
     title: entry.title,

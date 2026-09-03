@@ -1,15 +1,29 @@
 {
   "sources": [
-    { "id": "hn", "name": "Hacker News", "type": "rss", "url": "https://news.ycombinator.com/rss", "topics": ["general"] },
-    { "id": "reddit-typescript", "name": "Reddit r/typescript", "type": "atom", "url": "https://www.reddit.com/r/typescript/.rss", "topics": ["typescript"] },
-    { "id": "reddit-reactjs", "name": "Reddit r/reactjs", "type": "atom", "url": "https://www.reddit.com/r/reactjs/.rss", "topics": ["react"] },
-    { "id": "reddit-localllama", "name": "Reddit r/LocalLLaMA", "type": "atom", "url": "https://www.reddit.com/r/LocalLLaMA/.rss", "topics": ["ai"] },
-    { "id": "ts-releases", "name": "TypeScript - GitHub Releases", "type": "atom", "url": "https://github.com/microsoft/TypeScript/releases.atom", "topics": ["typescript"] },
-    { "id": "react-releases", "name": "React - GitHub Releases", "type": "atom", "url": "https://github.com/facebook/react/releases.atom", "topics": ["react"] },
-    { "id": "ts-blog", "name": "TypeScript Blog", "type": "rss", "url": "https://devblogs.microsoft.com/typescript/feed/", "topics": ["typescript"] },
-    { "id": "openai-news", "name": "OpenAI News", "type": "rss", "url": "https://openai.com/news/rss.xml", "topics": ["ai"] },
-    { "id": "deepmind-blog", "name": "Google DeepMind Blog", "type": "rss", "url": "https://deepmind.google/blog/feed/basic/", "topics": ["ai"] },
-    { "id": "hf-blog", "name": "Hugging Face Blog", "type": "rss", "url": "https://huggingface.co/blog/feed.xml", "topics": ["ai"] },
-    { "id": "anthropic-news", "name": "Anthropic News", "type": "scrape", "url": "https://www.anthropic.com/news", "topics": ["ai"], "note": "Brak oficjalnego RSS - wymaga scrapingu strony i wyciagniecia listy wpisow (np. przez Claude)" }
+    { "id": "hn", "name": "Hacker News", "type": "rss", "url": "https://news.ycombinator.com/rss", "tier": "community", "topics": ["general"] },
+    { "id": "reddit-typescript", "name": "Reddit r/typescript", "type": "atom", "url": "https://www.reddit.com/r/typescript/top/.rss?t=week", "tier": "community", "topics": ["typescript"], "maxItems": 5 },
+    { "id": "reddit-reactjs", "name": "Reddit r/reactjs", "type": "atom", "url": "https://www.reddit.com/r/reactjs/top/.rss?t=week", "tier": "community", "topics": ["react"], "maxItems": 5 },
+    { "id": "reddit-localllama", "name": "Reddit r/LocalLLaMA", "type": "atom", "url": "https://www.reddit.com/r/LocalLLaMA/top/.rss?t=week", "tier": "community", "topics": ["ai"], "maxItems": 5 },
+    { "id": "ts-releases", "name": "TypeScript - GitHub Releases", "type": "atom", "url": "https://github.com/microsoft/TypeScript/releases.atom", "tier": "official", "topics": ["typescript"] },
+    { "id": "react-releases", "name": "React - GitHub Releases", "type": "atom", "url": "https://github.com/facebook/react/releases.atom", "tier": "official", "topics": ["react"] },
+    { "id": "ts-blog", "name": "TypeScript Blog", "type": "rss", "url": "https://devblogs.microsoft.com/typescript/feed/", "tier": "official", "topics": ["typescript"] },
+    { "id": "openai-news", "name": "OpenAI News", "type": "rss", "url": "https://openai.com/news/rss.xml", "tier": "official", "topics": ["ai"] },
+    { "id": "deepmind-blog", "name": "Google DeepMind Blog", "type": "rss", "url": "https://deepmind.google/blog/feed/basic/", "tier": "official", "topics": ["ai"] },
+    { "id": "hf-blog", "name": "Hugging Face Blog", "type": "rss", "url": "https://huggingface.co/blog/feed.xml", "tier": "official", "topics": ["ai"] },
+    { "id": "anthropic-news", "name": "Anthropic News", "type": "scrape", "url": "https://www.anthropic.com/news", "tier": "official", "topics": ["ai"], "note": "Brak oficjalnego RSS - wymaga scrapingu strony i wyciagniecia listy wpisow (np. przez Claude)" },
+
+    { "id": "node-releases", "name": "Node.js - GitHub Releases", "type": "atom", "url": "https://github.com/nodejs/node/releases.atom", "tier": "official", "topics": ["fullstack"], "titlePattern": "Version [0-9]+[.][0-9]+[.][0-9]+" },
+    { "id": "node-blog", "name": "Node.js Blog", "type": "rss", "url": "https://nodejs.org/en/feed/blog.xml", "tier": "official", "topics": ["fullstack"] },
+    { "id": "bun-releases", "name": "Bun - GitHub Releases", "type": "atom", "url": "https://github.com/oven-sh/bun/releases.atom", "tier": "official", "topics": ["fullstack"], "titlePattern": "^Bun v[0-9]" },
+    { "id": "nextjs-releases", "name": "Next.js - GitHub Releases", "type": "atom", "url": "https://github.com/vercel/next.js/releases.atom", "tier": "official", "topics": ["react", "fullstack"], "titlePattern": "^v[0-9]+[.][0-9]+[.][0-9]+$" },
+    { "id": "nextjs-blog", "name": "Next.js Blog", "type": "rss", "url": "https://nextjs.org/feed.xml", "tier": "official", "topics": ["react", "fullstack"] },
+    { "id": "react-router-releases", "name": "React Router - GitHub Releases", "type": "atom", "url": "https://github.com/remix-run/react-router/releases.atom", "tier": "official", "topics": ["react"], "titlePattern": "^v[0-9]+[.][0-9]+[.][0-9]+$" },
+    { "id": "vite-releases", "name": "Vite - GitHub Releases", "type": "atom", "url": "https://github.com/vitejs/vite/releases.atom", "tier": "official", "topics": ["fullstack"], "titlePattern": "^v[0-9]+[.][0-9]+[.][0-9]+$" },
+    { "id": "prisma-releases", "name": "Prisma - GitHub Releases", "type": "atom", "url": "https://github.com/prisma/prisma/releases.atom", "tier": "official", "topics": ["fullstack"], "titlePattern": "^v?[0-9]+[.][0-9]+[.][0-9]+$" },
+    { "id": "drizzle-releases", "name": "Drizzle ORM - GitHub Releases", "type": "atom", "url": "https://github.com/drizzle-team/drizzle-orm/releases.atom", "tier": "official", "topics": ["fullstack"], "titlePattern": "^v?[0-9]+[.][0-9]+[.][0-9]+$" },
+    { "id": "neon-blog", "name": "Neon Blog", "type": "rss", "url": "https://neon.com/blog/rss.xml", "tier": "official", "topics": ["fullstack"] },
+    { "id": "neon-changelog", "name": "Neon Changelog", "type": "rss", "url": "https://neon.com/docs/changelog/rss.xml", "tier": "official", "topics": ["fullstack"] },
+    { "id": "vercel-blog", "name": "Vercel Blog", "type": "atom", "url": "https://vercel.com/atom", "tier": "official", "topics": ["fullstack"] },
+    { "id": "cloudflare-blog", "name": "Cloudflare Blog", "type": "rss", "url": "https://blog.cloudflare.com/rss", "tier": "official", "topics": ["fullstack"] }
   ]
 }

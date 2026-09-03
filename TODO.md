@@ -579,3 +579,115 @@ Agent aktualizuje ten plik na bieżąco, ale nigdy go nie commituje bez zgody
         grupowanie po hoście w `pipeline.ts`, treść migracji 008, komplet
         tras API i plików `lib/`, 11 źródeł w `sources.json` (5 rss, 5 atom,
         1 scrape) wraz z URL-ami zgodnymi z tabelą w sekcji 5.
+- [x] Rozbudowa źródeł o nowoczesny fullstack: 11 → 24 źródła. Dołożone kanały
+      oficjalne — Node.js (releases + blog), Bun, Next.js (releases + blog),
+      React Router, Vite, Prisma, Drizzle ORM, Neon (blog + changelog), Vercel,
+      Cloudflare. Wszystkie 13 URL-i sprawdzone na żywo: 200, poprawny element
+      główny, niepusta lista wpisów.
+      - `releases.atom` okazał się kanałem **tagów**, nie wydań. Zmierzone na
+        dziesięciu wpisach: Next.js 8 canary / 2 stabilne, Prisma same
+        `8.1.0-dev.N`, Vite miesza `v8.2.2` z `create-vite@9.2.0`, Bun dokłada
+        tagi CI (`consolidation-step-7-green`). Bez filtra te cztery źródła
+        zalałyby skrzynkę wpisami, których nikt nie ogłasza.
+      - Nowe pole `titlePattern` w `sources.json` — **lista dopuszczeń, nie
+        wykluczeń**, bo taki kształt ma problem: „jak wygląda wydanie" to zbiór
+        skończony, „jak wygląda wszystko inne" nie jest i każda nowa konwencja
+        upstreamu przeciekałaby przez blacklistę. Do tego `maxItems` jako limit
+        per źródło, nadpisujący `MAX_ITEMS_PER_SOURCE`.
+      - Filtr i limit przeniesione z fetcherów do `sources/index.ts`, w tej
+        kolejności: najpierw filtr na całej stronie feeda, potem limit na tym,
+        co zostało. Odwrotnie (a tak było, bo `rss.ts`/`atom.ts`/`scrape.ts`
+        cięły same) można wziąć 15 canary i dopiero potem odkryć, że stabilny
+        release stał na 16. miejscu.
+      - `fetchSource` zwraca teraz `FetchResult` z licznikiem sprzed filtra.
+        Bez tego alarm o pustym feedzie („HTTP OK, zero wpisów") krzyczałby na
+        Prismę przy każdym przebiegu, w którym akurat nie ma stabilnego wydania —
+        czyli na źródło działające dokładnie tak, jak skonfigurowane.
+      - Zły regex w configu zatrzymuje start (`config.ts` kompiluje wzorce przy
+        wczytaniu). Cicho nieprzepuszczające niczego źródło to ten sam tryb
+        awarii, za który projekt już raz zapłacił tygodniem ciszy z Reddita.
+- [x] Reddit: zamiast strumienia nowych postów — `/top/.rss?t=week` i `maxItems: 5`
+      na każdy z trzech subredditów.
+      - Powód z użytkowania: subreddit to jedyne źródło, w którym nikt niczego
+        nie ogłasza — większość wpisów to pytania początkujących i autopromocja.
+        Głosowanie społeczności jest gotową selekcją wstępną i nic nie kosztuje;
+        bierzemy ją zamiast płacić Claude za odsiewanie długiego ogona.
+        Zmierzone: 16-25 wpisów w feedzie, 5 branych.
+      - `t=week`, nie `t=day`, bo cron chodzi co dwa dni. Nakładanie się okien
+        nic nie kosztuje — powtórki odpada deduplikacja po URL przed modelem.
+      - Świadomie **nie** zrobione: osobna, częstsza częstotliwość dla Reddita.
+        Lista top tygodnia zmienia się wolno, a każdy dodatkowy przebieg to
+        kolejne minuty czekania na limit hosta — koszt realny, zysk pozorny.
+- [x] Błąd w `sources/http.ts` znaleziony przy okazji: `exhausted()` czytało
+      `x-ratelimit-remaining` przez `Number(...)`, a `Number(null)` to `0`.
+      Host, który o limitach nie mówi nic, wyglądał więc jak host z wyczerpanym
+      budżetem i każde kolejne źródło na tym samym hoście czekało ślepą minutę.
+      - Przy dwóch feedach z github.com niewidoczne. Przy dziewięciu — zmierzone
+        w suchym przebiegu — osiem `waiting 61s for github.com` pod rząd.
+      - Ta sama klasa błędu, co opisana w komentarzu przy `Retry-After` kilka
+        linijek wyżej. Brak nagłówka jest teraz sprawdzany osobno, przed
+        konwersją.
+      - Po poprawce suchy przebieg wszystkich 23 źródeł sieciowych: zero czekania
+        poza Reddittem (2 × ~60 s, zgodnie z jego realnym limitem).
+- [x] Wiarygodność źródła jako sygnał dla modelu — pole `tier` (`official` /
+      `community`) w `sources.json`, przekazywane do promptu oceniającego.
+      - `assessItem` dostaje całe źródło zamiast samego `sourceId`: nazwa, która
+        coś znaczy („Reddit r/reactjs" zamiast `reddit-reactjs`), i `tier`.
+        `pipeline.ts` odzyskuje źródło z mapy po id, bo wpisy jadą przez przebieg
+        płasko.
+      - Prompt: wpisom `community` nie wolno stawiać więcej niż 2 bez sprawdzalnej,
+        nowej informacji — nawet gdy temat idealnie pasuje. Trafność to nie temat.
+      - `tier` jest wymagany, nie domyślny. Każdy domyślny musiałby brzmieć
+        `official` (20 z 24 źródeł) i właśnie dlatego byłby pułapką: nowe źródło
+        community bez tego pola czytałoby się jak komunikat producenta. Brak
+        pola zatrzymuje start (`config.ts`).
+      - **Zmierzone, bo warto wiedzieć, ile to naprawdę dało:** sonda A/B na
+        ośmiu realnych wpisach (stary prompt kontra nowy, Haiku 4.5) zmieniła
+        jedną ocenę — „Ambient CSS v3" z 2 na 1. Siedem pozostałych identycznie.
+        Model już wcześniej oceniał community nisko, bo w polu `Źródło:` widział
+        id ze słowem „reddit". Zmiana jest więc ubezpieczeniem (reguła zapisana
+        wprost, nie wywnioskowana z kształtu identyfikatora), a nie zmierzoną
+        poprawą — i tak jest opisana w ADR.
+      - Zastrzeżenie do sondy: leciała bez leadów, które w prawdziwym przebiegu
+        są obecne. Stąd np. `v16.3.4` z Next.js na 2 — goły numer wersji nic nie
+        mówi, a w przebiegu ma przy sobie changelog z `content`.
+- [x] Podłoga trafności dla stabilnych wydań: wydanie narzędzia ze stacku ogłoszone
+      przez źródło `official` dostaje w promptcie co najmniej 4.
+      - Powód wyszedł z weryfikacji ustawień, nie z założenia: przy progu
+        powiadomień 4 `Node.js 26.8.1 (Current)` i `v8.2.2` z Vite dostawały 2.
+        Nie dlatego, że są nieważne — goły numer wersji nie niesie informacji,
+        a model streszcza to, co dostaje. Ubogi tytuł świadczy o kanale, nie
+        o wadze wydarzenia.
+      - Wyjątek działa **tylko w górę** i jawnie nie obejmuje: wydań wstępnych
+        (canary, beta, rc, dev, nightly, alpha), pojedynczych paczek z monorepa,
+        narzędzi spoza stacku oraz wpisów `community`.
+      - Zmierzone po zmianie — podniosło dokładnie to, co miało:
+        `Node.js 26.8.1` 2 → 4, Vite `v8.2.2` 2 → 4, Next.js `v16.3.4` 2 → 4,
+        TypeScript 7.0.2 bez zmian (4).
+      - Zabezpieczenia trzymają: `v16.4.0-canary.15` = 2, `create-vite@9.2.0` = 2,
+        wydanie ogłoszone na Reddicie = 2, wpis Cloudflare niebędący wydaniem = 2,
+        newsy OpenAI spoza tematu = 1.
+- [x] Zweryfikowane przed zmianą promptu, czy rozbudowa źródeł wymaga nowych
+      kategorii — **nie wymaga**.
+      - Osiem realnych wpisów z nowych źródeł rozłożyło się na istniejące
+        kategorie (`fullstack`, `javascript`, `typescript`, `react`, `ai`).
+        Ani razu nie zabrakło kubełka.
+      - Trzy subskrypcje w bazie, wszystkie z progiem 4: jedna `topics = NULL`
+        (wszystkie), dwie z jawną listą 5 z 6 — bez `other`. `fullstack` jest
+        zaznaczony wszędzie, więc rozbudowa dochodzi na każde urządzenie.
+      - Luka po `other` policzona, nie oszacowana: 92 z 430 wpisów ma wyłącznie
+        tę kategorię, ale **żaden nie dostał oceny ≥ 4**, więc przy progu 4 nigdy
+        nie zabrała ani jednego powiadomienia. Bez zmian.
+      - Do zapamiętania: `fullstack` staje się workiem (Node, Bun, Vite, Prisma,
+        Drizzle, Neon, Vercel, Cloudflare — wszystko tam). Rozbicie kategorii to
+        robota w czterech miejscach naraz (enum w `claude.ts`, `lib/items.ts`
+        i dwie lokalne kopie: `pwa/push-settings.tsx`, `api/push/settings/route.ts`)
+        plus migracja przepisująca wiersze, jak przy 007.
+- [x] `docs/adr/0005-source-selection-at-the-source.md` — status `Proposed`.
+      Spina trzy powyższe decyzje w jedną: selekcja dzieje się u źródła, przed
+      wywołaniem modelu, a nie po ocenie. Odrzucone warianty z uzasadnieniem:
+      poleganie na progu trafności, dwustopniowy filtr w agencie, osobny
+      harmonogram dla community, Reddit przez `top.json`.
+      - README i `docs/ARCHITECTURE.md` zsynchronizowane: 11 → 24 źródła
+        (10 rss, 13 atom, 1 scrape), nowy krok w diagramie przepływu, pole
+        `tier` w opisie configu, wpis o `titlePattern` wśród pułapek.

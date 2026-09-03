@@ -3,7 +3,7 @@ import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 
 import { getAnthropic, MODEL } from "@/anthropic.js";
 import { noteError } from "@/monitor.js";
-import type { Assessment, NormalizedItem } from "@/types.js";
+import type { Assessment, NormalizedItem, SourceConfig } from "@/types.js";
 
 const AssessmentSchema = z.object({
   relevance: z
@@ -34,12 +34,47 @@ Skala trafności:
 2 — luźno powiązane z technologią
 1 — poza obszarem zainteresowań (polityka, biznes, sprzęt konsumencki, kryptowaluty)
 
+Przy każdym wpisie dostajesz typ źródła i on zmienia sposób oceniania:
+
+- "official" — kanał, w którym ktoś świadomie coś ogłasza: release notes projektu,
+  blog firmowy albo zespołu. Tytuł i lead opisują zdarzenie, które faktycznie zaszło.
+  Oceniaj wprost według skali powyżej.
+- "community" — post na forum (Reddit, Hacker News). To, że ktoś coś napisał, nie
+  znaczy jeszcze, że cokolwiek się wydarzyło. W tej grupie typowe są: pytania
+  początkujących, autopromocja własnego projektu, opinie bez nowej informacji,
+  narzekania i treści żartobliwe. Takim wpisom stawiaj najwyżej 2, nawet jeśli
+  temat idealnie pasuje do jego stacku — trafność to nie to samo co temat.
+  Ocenę 4-5 z community rezerwuj dla wpisu, który niesie sprawdzalną, nową
+  informację: wynik pomiaru, opis realnego problemu wraz z rozwiązaniem, wydanie
+  narzędzia, którego ten odbiorca mógłby faktycznie użyć.
+
+Jeden wyjątek od skali, działający tylko w górę: **stabilne wydanie narzędzia z jego
+stacku, ogłoszone przez źródło "official", to zawsze co najmniej 4** — nawet jeśli
+tytuł jest samym numerem wersji, a lead pusty. Sam fakt, że wyszła nowa wersja
+czegoś, czego on używa, jest informacją, którą chce dostać; ubogi opis świadczy
+o kanale, nie o wadze wydarzenia. Chodzi o narzędzia pełniące w jego pracy rolę:
+język, runtime, framework i router, bundler, ORM i baza, hosting i CDN.
+
+Ten wyjątek NIE obejmuje: wydań wstępnych (canary, beta, rc, dev, nightly, alpha),
+wydań pojedynczych paczek pomocniczych z monorepa, wydań narzędzi spoza jego stacku
+ani wpisów "community" — tam zostaje zwykła skala i zwykły limit.
+
 Streszczenie pisz po polsku, rzeczowo, 2-3 zdania. Zero marketingowego tonu, zero
 "w tym artykule dowiesz się". Pisz, co konkretnie się wydarzyło i co z tego wynika.
 Jeśli masz tylko tytuł i krótki lead, streszczaj to, co jest — nie zmyślaj szczegółów.`;
 
-/** One Claude call per item: relevance score plus a Polish summary. */
-export async function assessItem(item: NormalizedItem): Promise<Assessment | null> {
+/**
+ * One Claude call per item: relevance score plus a Polish summary.
+ *
+ * The source is passed whole rather than as `item.sourceId` alone, because two
+ * of its fields carry meaning the id does not: `name`, which reads like
+ * something ("Reddit r/reactjs", not "reddit-reactjs"), and `tier`, which tells
+ * the model whether it is looking at an announcement or at somebody's post.
+ */
+export async function assessItem(
+  item: NormalizedItem,
+  source: SourceConfig,
+): Promise<Assessment | null> {
   const excerpt = item.excerpt ? `\nLead: ${item.excerpt.slice(0, 2000)}` : "";
 
   const parsed = await getAnthropic().messages.parse({
@@ -51,7 +86,9 @@ export async function assessItem(item: NormalizedItem): Promise<Assessment | nul
     messages: [
       {
         role: "user",
-        content: `Źródło: ${item.sourceId}\nTytuł: ${item.title}\nURL: ${item.url}${excerpt}`,
+        content:
+          `Źródło: ${source.name}\nTyp źródła: ${source.tier}\n` +
+          `Tytuł: ${item.title}\nURL: ${item.url}${excerpt}`,
       },
     ],
   });
